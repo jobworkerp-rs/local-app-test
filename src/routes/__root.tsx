@@ -9,7 +9,7 @@ export const Route = createRootRoute({
 function RootLayout() {
   return (
     <>
-      <div className="flex h-screen bg-slate-50">
+      <div className="flex h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100">
         <Sidebar />
         <div className="flex flex-1 flex-col overflow-hidden">
           <Header />
