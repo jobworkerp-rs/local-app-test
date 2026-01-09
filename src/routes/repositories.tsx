@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useMatch } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { useState, type FormEvent } from "react";
@@ -10,8 +10,23 @@ import {
 } from "@/types/models";
 
 export const Route = createFileRoute("/repositories")({
-  component: RepositoriesPage,
+  component: RepositoriesLayout,
 });
+
+function RepositoriesLayout() {
+  const repoIdMatch = useMatch({
+    from: "/repositories/$repoId",
+    shouldThrow: false,
+  });
+
+  // If we're on a child route (has repoId param), render Outlet for the child
+  if (repoIdMatch) {
+    return <Outlet />;
+  }
+
+  // Otherwise, render the repositories list page
+  return <RepositoriesPage />;
+}
 
 function RepositoriesPage() {
   const queryClient = useQueryClient();
