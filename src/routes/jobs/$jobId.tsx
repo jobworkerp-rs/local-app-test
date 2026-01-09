@@ -39,10 +39,13 @@ const statusLabels: Record<AgentJobStatus, string> = {
 
 function JobDetailPage() {
   const { jobId } = Route.useParams();
+  const numericJobId = Number(jobId);
+  const isValidJobId = !!jobId && Number.isFinite(numericJobId);
 
   const jobQuery = useQuery({
     queryKey: ["agent-job", jobId],
-    queryFn: () => invoke<AgentJob>("get_job", { id: Number(jobId) }),
+    queryFn: () => invoke<AgentJob>("get_job", { id: numericJobId }),
+    enabled: isValidJobId,
     refetchInterval: (query) => {
       const job = query.state.data;
       if (!job) return 5000;
@@ -58,6 +61,19 @@ function JobDetailPage() {
 
   const job = jobQuery.data;
   const repository = repositoriesQuery.data?.find((r) => r.id === job?.repository_id);
+
+  if (!isValidJobId) {
+    return (
+      <div className="container mx-auto p-8">
+        <div className="flex items-center gap-4 mb-6">
+          <Link to="/jobs" className="text-blue-600 hover:underline">
+            &larr; Back to Jobs
+          </Link>
+        </div>
+        <p className="text-red-600">Error: Invalid job ID</p>
+      </div>
+    );
+  }
 
   if (jobQuery.isLoading) {
     return (
