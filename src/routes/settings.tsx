@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { useState, useEffect, type FormEvent } from "react";
@@ -107,9 +107,9 @@ function SettingsPage() {
   return (
     <div className="container mx-auto p-8">
       <div className="flex items-center gap-4 mb-6">
-        <a href="/" className="text-blue-600 hover:underline">
+        <Link to="/" className="text-blue-600 hover:underline">
           &larr; Back
-        </a>
+        </Link>
         <h1 className="text-3xl font-bold">Settings</h1>
       </div>
 
