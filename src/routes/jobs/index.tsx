@@ -1,51 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
+import { type AgentJobStatus, type AgentJob, type Repository } from "@/types/models";
 
 export const Route = createFileRoute("/jobs/")({
   component: JobsPage,
 });
-
-type AgentJobStatus =
-  | "Pending"
-  | "PreparingWorkspace"
-  | "FetchingIssue"
-  | "RunningAgent"
-  | "CreatingPR"
-  | "PrCreated"
-  | "Merged"
-  | "Completed"
-  | "Failed"
-  | "Cancelled";
-
-interface AgentJob {
-  id: number;
-  repository_id: number;
-  issue_number: number;
-  jobworkerp_job_id: string;
-  status: AgentJobStatus;
-  worktree_path: string | null;
-  branch_name: string | null;
-  pr_number: number | null;
-  error_message: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-interface Repository {
-  id: number;
-  mcp_server_name: string;
-  platform: "GitHub" | "Gitea";
-  base_url: string;
-  name: string;
-  url: string;
-  owner: string;
-  repo_name: string;
-  local_path: string | null;
-  last_synced_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
 
 const statusConfig: Record<AgentJobStatus, { label: string; color: string; bgColor: string }> = {
   Pending: { label: "Pending", color: "text-gray-700", bgColor: "bg-gray-100" },

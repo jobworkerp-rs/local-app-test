@@ -2,42 +2,16 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { useState, type FormEvent } from "react";
+import {
+  type Repository,
+  type CreateRepositoryRequest,
+  type McpServerInfo,
+  getGiteaWebBaseUrl,
+} from "@/types/models";
 
 export const Route = createFileRoute("/repositories")({
   component: RepositoriesPage,
 });
-
-interface Repository {
-  id: number;
-  mcp_server_name: string;
-  platform: "GitHub" | "Gitea";
-  base_url: string;
-  name: string;
-  url: string;
-  owner: string;
-  repo_name: string;
-  local_path: string | null;
-  last_synced_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-interface CreateRepositoryRequest {
-  mcp_server_name: string;
-  platform: "GitHub" | "Gitea";
-  base_url: string;
-  name: string;
-  url: string;
-  owner: string;
-  repo_name: string;
-  local_path: string | null;
-}
-
-interface McpServerInfo {
-  name: string;
-  description: string | null;
-  runner_type: string;
-}
 
 function RepositoriesPage() {
   const queryClient = useQueryClient();
@@ -207,7 +181,7 @@ function RepositoryForm({ mcpServers, onSuccess }: RepositoryFormProps) {
   const handleOwnerRepoChange = (owner: string, repoName: string) => {
     const baseUrl = formData.platform === "GitHub"
       ? "https://github.com"
-      : formData.base_url.replace("/api/v1", "");
+      : getGiteaWebBaseUrl(formData.base_url);
 
     setFormData({
       ...formData,
