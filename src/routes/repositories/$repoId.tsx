@@ -34,7 +34,8 @@ function RepositoryDetailPage() {
 
   const repositoryQuery = useQuery({
     queryKey: ["repository", numericRepoId],
-    queryFn: () => invoke<Repository>("get_repository", { id: numericRepoId }),
+    queryFn: () =>
+      invoke<Repository>("get_repository", { repository_id: numericRepoId }),
     enabled: isValidRepoId,
   });
 

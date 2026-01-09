@@ -195,15 +195,18 @@ fn is_related_pr(pr: &PullRequest, issue_number: i32) -> bool {
 
     // Check branch name patterns only if head_branch is available
     if let Some(ref branch) = pr.head_branch {
-        let issue_str = issue_number.to_string();
-        if branch.contains(&format!("issue-{}", issue_str))
-            || branch.contains(&format!("issue/{}", issue_str))
-            || branch.contains(&format!("fix-{}", issue_str))
-            || branch.contains(&format!("fix/{}", issue_str))
-            || branch.contains(&format!("feature/issue-{}", issue_str))
-            || branch.ends_with(&format!("/{}", issue_str))
-        {
-            return true;
+        // Use regex to match exact issue number in branch name patterns
+        // Patterns: issue-N, issue/N, fix-N, fix/N, feature/issue-N, or /N at end
+        // The pattern ensures N is the exact issue number (not a suffix like /21 matching issue 1)
+        let branch_pattern = format!(
+            r"(?:issue[-/]{}|fix[-/]{}|feature/issue-{}|/{}$)(?:[^0-9]|$)",
+            issue_number, issue_number, issue_number, issue_number
+        );
+
+        if let Ok(branch_re) = Regex::new(&branch_pattern) {
+            if branch_re.is_match(branch) {
+                return true;
+            }
         }
     }
 

@@ -88,7 +88,10 @@ pub async fn create_repository(
 }
 
 #[tauri::command]
-pub async fn get_repository(db: State<'_, DbPool>, id: i64) -> Result<Repository, AppError> {
+pub async fn get_repository(
+    db: State<'_, DbPool>,
+    repository_id: i64,
+) -> Result<Repository, AppError> {
     let conn = db.get().map_err(|e| AppError::Internal(e.to_string()))?;
 
     let mut stmt = conn.prepare(
@@ -97,7 +100,7 @@ pub async fn get_repository(db: State<'_, DbPool>, id: i64) -> Result<Repository
          FROM repositories WHERE id = ?1",
     )?;
 
-    let repo = stmt.query_row([id], |row| {
+    let repo = stmt.query_row([repository_id], |row| {
         let platform_str: String = row.get(2)?;
         Ok(Repository {
             id: row.get(0)?,
