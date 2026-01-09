@@ -29,26 +29,7 @@ pub struct UpdateSettingsRequest {
 #[tauri::command]
 pub async fn get_app_settings(db: State<'_, DbPool>) -> Result<AppSettings, AppError> {
     let conn = db.get().map_err(|e| AppError::Internal(e.to_string()))?;
-
-    let settings = conn.query_row(
-        "SELECT id, worktree_base_path, default_base_branch, agent_timeout_minutes,
-                sync_interval_minutes, created_at, updated_at
-         FROM app_settings WHERE id = 1",
-        [],
-        |row| {
-            Ok(AppSettings {
-                id: row.get(0)?,
-                worktree_base_path: row.get(1)?,
-                default_base_branch: row.get(2)?,
-                agent_timeout_minutes: row.get(3)?,
-                sync_interval_minutes: row.get(4)?,
-                created_at: row.get(5)?,
-                updated_at: row.get(6)?,
-            })
-        },
-    )?;
-
-    Ok(settings)
+    fetch_settings(&conn)
 }
 
 /// Fetch settings from connection (internal helper)
@@ -75,6 +56,62 @@ fn fetch_settings(
     .map_err(|e| AppError::Internal(e.to_string()))
 }
 
+/// Validate and sanitize update request, returning validated values or None
+fn validate_update_request(
+    request: &UpdateSettingsRequest,
+) -> Result<UpdateSettingsRequest, AppError> {
+    let worktree_base_path = match &request.worktree_base_path {
+        Some(path) => {
+            let trimmed = path.trim();
+            if trimmed.is_empty() {
+                return Err(AppError::InvalidInput(
+                    "worktree_base_path cannot be empty".into(),
+                ));
+            }
+            Some(trimmed.to_string())
+        }
+        None => None,
+    };
+
+    let default_base_branch = match &request.default_base_branch {
+        Some(branch) => {
+            let trimmed = branch.trim();
+            if trimmed.is_empty() {
+                return Err(AppError::InvalidInput(
+                    "default_base_branch cannot be empty".into(),
+                ));
+            }
+            Some(trimmed.to_string())
+        }
+        None => None,
+    };
+
+    let agent_timeout_minutes = match request.agent_timeout_minutes {
+        Some(minutes) if minutes <= 0 => {
+            return Err(AppError::InvalidInput(
+                "agent_timeout_minutes must be a positive number".into(),
+            ));
+        }
+        other => other,
+    };
+
+    let sync_interval_minutes = match request.sync_interval_minutes {
+        Some(minutes) if minutes <= 0 => {
+            return Err(AppError::InvalidInput(
+                "sync_interval_minutes must be a positive number".into(),
+            ));
+        }
+        other => other,
+    };
+
+    Ok(UpdateSettingsRequest {
+        worktree_base_path,
+        default_base_branch,
+        agent_timeout_minutes,
+        sync_interval_minutes,
+    })
+}
+
 /// Update application settings
 #[tauri::command]
 pub async fn update_app_settings(
@@ -92,34 +129,25 @@ pub async fn update_app_settings(
         return fetch_settings(&conn);
     }
 
-    // Build dynamic UPDATE using named parameters for Send safety
-    let mut updates = Vec::new();
-    if request.worktree_base_path.is_some() {
-        updates.push("worktree_base_path = :worktree_base_path");
-    }
-    if request.default_base_branch.is_some() {
-        updates.push("default_base_branch = :default_base_branch");
-    }
-    if request.agent_timeout_minutes.is_some() {
-        updates.push("agent_timeout_minutes = :agent_timeout_minutes");
-    }
-    if request.sync_interval_minutes.is_some() {
-        updates.push("sync_interval_minutes = :sync_interval_minutes");
-    }
-    updates.push("updated_at = datetime('now')");
+    // Validate input before DB operations
+    let validated = validate_update_request(&request)?;
 
-    let sql = format!(
-        "UPDATE app_settings SET {} WHERE id = 1",
-        updates.join(", ")
-    );
+    // Use COALESCE to handle optional updates - if param is NULL, keep existing value
+    let sql = "UPDATE app_settings SET
+        worktree_base_path = COALESCE(:worktree_base_path, worktree_base_path),
+        default_base_branch = COALESCE(:default_base_branch, default_base_branch),
+        agent_timeout_minutes = COALESCE(:agent_timeout_minutes, agent_timeout_minutes),
+        sync_interval_minutes = COALESCE(:sync_interval_minutes, sync_interval_minutes),
+        updated_at = datetime('now')
+        WHERE id = 1";
 
-    let mut stmt = conn.prepare(&sql)?;
+    let mut stmt = conn.prepare(sql)?;
 
     stmt.execute(rusqlite::named_params! {
-        ":worktree_base_path": request.worktree_base_path,
-        ":default_base_branch": request.default_base_branch,
-        ":agent_timeout_minutes": request.agent_timeout_minutes,
-        ":sync_interval_minutes": request.sync_interval_minutes,
+        ":worktree_base_path": validated.worktree_base_path,
+        ":default_base_branch": validated.default_base_branch,
+        ":agent_timeout_minutes": validated.agent_timeout_minutes,
+        ":sync_interval_minutes": validated.sync_interval_minutes,
     })?;
 
     fetch_settings(&conn)

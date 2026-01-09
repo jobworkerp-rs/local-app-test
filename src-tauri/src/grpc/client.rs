@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use tonic::metadata::MetadataValue;
 use tonic::transport::Channel;
 
 use crate::error::AppError;
@@ -15,7 +16,7 @@ use super::service::{
 #[derive(Clone)]
 pub struct JobworkerpClient {
     channel: Channel,
-    auth_token: Option<String>,
+    auth_metadata: Option<MetadataValue<tonic::metadata::Ascii>>,
 }
 
 impl JobworkerpClient {
@@ -25,9 +26,21 @@ impl JobworkerpClient {
             .map_err(|e| AppError::Config(e.to_string()))?
             .connect_lazy();
 
-        let auth_token = std::env::var("JOBWORKERP_AUTH_TOKEN").ok();
+        // Parse auth token at construction time to fail early on invalid tokens
+        let auth_metadata = match std::env::var("JOBWORKERP_AUTH_TOKEN") {
+            Ok(token) => {
+                let value: MetadataValue<tonic::metadata::Ascii> = token
+                    .parse()
+                    .map_err(|e| AppError::Config(format!("Invalid auth token format: {}", e)))?;
+                Some(value)
+            }
+            Err(_) => None,
+        };
 
-        Ok(Self { channel, auth_token })
+        Ok(Self {
+            channel,
+            auth_metadata,
+        })
     }
 
     /// Create a new client wrapped in Arc for shared ownership
@@ -57,15 +70,10 @@ impl JobworkerpClient {
 
     /// Add auth header to request if token is configured
     fn add_auth_header<T>(&self, mut request: tonic::Request<T>) -> tonic::Request<T> {
-        if let Some(token) = &self.auth_token {
-            match token.parse() {
-                Ok(value) => {
-                    request.metadata_mut().insert("jobworkerp-auth", value);
-                }
-                Err(e) => {
-                    tracing::warn!("Failed to parse auth token as metadata value: {}", e);
-                }
-            }
+        if let Some(value) = &self.auth_metadata {
+            request
+                .metadata_mut()
+                .insert("jobworkerp-auth", value.clone());
         }
         request
     }
@@ -78,13 +86,8 @@ impl JobworkerpClient {
             ..Default::default()
         }));
 
-        match client.find_list(request).await {
-            Ok(_) => Ok(true),
-            Err(status) => {
-                tracing::warn!("Connection check failed: {:?}", status);
-                Ok(false)
-            }
-        }
+        client.find_list(request).await?;
+        Ok(true)
     }
 
     /// Enqueue a job and return job ID
@@ -114,11 +117,15 @@ impl JobworkerpClient {
     }
 
     /// Enqueue a job and stream results
+    ///
+    /// Returns only the stream. If you need the job_id, use `enqueue_job()` followed
+    /// by `listen_stream()` instead. The job_id can be extracted from the first
+    /// `ResultOutputItem` in the stream if needed by the caller.
     pub async fn enqueue_for_stream(
         &self,
         worker_name: &str,
         args: &serde_json::Value,
-    ) -> Result<(String, tonic::Streaming<data::ResultOutputItem>), AppError> {
+    ) -> Result<tonic::Streaming<data::ResultOutputItem>, AppError> {
         let mut client = self.job_client();
 
         let request = JobRequest {
@@ -131,15 +138,7 @@ impl JobworkerpClient {
 
         let req = self.add_auth_header(tonic::Request::new(request));
         let response = client.enqueue_for_stream(req).await?;
-        let stream = response.into_inner();
-
-        // TODO: Extract job_id from the first stream message.
-        // The gRPC streaming API returns job_id in the initial ResultOutputItem.
-        // For now, return a placeholder. Callers should handle this appropriately
-        // or use enqueue() followed by listen_stream() for cases requiring job_id.
-        let job_id = "pending".to_string();
-
-        Ok((job_id, stream))
+        Ok(response.into_inner())
     }
 
     /// Listen to job result stream

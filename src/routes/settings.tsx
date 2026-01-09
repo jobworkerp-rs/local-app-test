@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
-import { useState, useEffect } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
@@ -33,9 +33,11 @@ function SettingsPage() {
   });
 
   const [formData, setFormData] = useState<UpdateSettingsRequest>({});
+  const [isFormDirty, setIsFormDirty] = useState(false);
 
   useEffect(() => {
-    if (settingsQuery.data) {
+    // Only update form from server data if form is not dirty (user hasn't edited)
+    if (settingsQuery.data && !isFormDirty) {
       setFormData({
         worktree_base_path: settingsQuery.data.worktree_base_path,
         default_base_branch: settingsQuery.data.default_base_branch,
@@ -43,19 +45,45 @@ function SettingsPage() {
         sync_interval_minutes: settingsQuery.data.sync_interval_minutes,
       });
     }
-  }, [settingsQuery.data]);
+  }, [settingsQuery.data, isFormDirty]);
 
   const updateMutation = useMutation({
     mutationFn: (request: UpdateSettingsRequest) =>
       invoke<AppSettings>("update_app_settings", { request }),
     onSuccess: () => {
+      setIsFormDirty(false);
       queryClient.invalidateQueries({ queryKey: ["app-settings"] });
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     updateMutation.mutate(formData);
+  };
+
+  // Helper to update form and mark as dirty
+  const updateFormField = <K extends keyof UpdateSettingsRequest>(
+    field: K,
+    value: UpdateSettingsRequest[K]
+  ) => {
+    setFormData({ ...formData, [field]: value });
+    setIsFormDirty(true);
+  };
+
+  // Parse and validate numeric input
+  const handleNumericChange = (
+    field: "agent_timeout_minutes" | "sync_interval_minutes",
+    value: string
+  ) => {
+    if (value === "") {
+      updateFormField(field, undefined);
+      return;
+    }
+    const parsed = Number(value);
+    if (Number.isFinite(parsed) && parsed >= 0) {
+      updateFormField(field, parsed);
+    }
+    // Invalid input is ignored (keeps previous value)
   };
 
   if (settingsQuery.isLoading) {
@@ -96,9 +124,9 @@ function SettingsPage() {
           <input
             id="worktree_base_path"
             type="text"
-            value={formData.worktree_base_path || ""}
+            value={formData.worktree_base_path ?? ""}
             onChange={(e) =>
-              setFormData({ ...formData, worktree_base_path: e.target.value })
+              updateFormField("worktree_base_path", e.target.value)
             }
             className="w-full p-2 border rounded"
           />
@@ -114,9 +142,9 @@ function SettingsPage() {
           <input
             id="default_base_branch"
             type="text"
-            value={formData.default_base_branch || ""}
+            value={formData.default_base_branch ?? ""}
             onChange={(e) =>
-              setFormData({ ...formData, default_base_branch: e.target.value })
+              updateFormField("default_base_branch", e.target.value)
             }
             className="w-full p-2 border rounded"
           />
@@ -132,12 +160,10 @@ function SettingsPage() {
           <input
             id="agent_timeout_minutes"
             type="number"
-            value={formData.agent_timeout_minutes || 0}
+            min="0"
+            value={formData.agent_timeout_minutes ?? ""}
             onChange={(e) =>
-              setFormData({
-                ...formData,
-                agent_timeout_minutes: e.target.valueAsNumber || 0,
-              })
+              handleNumericChange("agent_timeout_minutes", e.target.value)
             }
             className="w-full p-2 border rounded"
           />
@@ -153,12 +179,10 @@ function SettingsPage() {
           <input
             id="sync_interval_minutes"
             type="number"
-            value={formData.sync_interval_minutes || 0}
+            min="0"
+            value={formData.sync_interval_minutes ?? ""}
             onChange={(e) =>
-              setFormData({
-                ...formData,
-                sync_interval_minutes: e.target.valueAsNumber || 0,
-              })
+              handleNumericChange("sync_interval_minutes", e.target.value)
             }
             className="w-full p-2 border rounded"
           />
