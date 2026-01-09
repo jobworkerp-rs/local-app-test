@@ -1,119 +1,154 @@
-use std::sync::Arc;
+use serde::{Deserialize, Serialize};
 use tauri::State;
 
-use crate::db::AppSettings;
-use crate::state::AppState;
+use crate::db::DbPool;
+use crate::error::AppError;
 
-#[derive(serde::Deserialize)]
+/// Application settings
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AppSettings {
+    pub id: i64,
+    pub worktree_base_path: String,
+    pub default_base_branch: String,
+    pub agent_timeout_minutes: i64,
+    pub sync_interval_minutes: i64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// Update settings request
+#[derive(Debug, Deserialize)]
 pub struct UpdateSettingsRequest {
     pub worktree_base_path: Option<String>,
     pub default_base_branch: Option<String>,
-    pub agent_timeout_minutes: Option<i32>,
-    pub sync_interval_minutes: Option<i32>,
-    pub grpc_server_url: Option<String>,
-    pub locale: Option<String>,
+    pub agent_timeout_minutes: Option<i64>,
+    pub sync_interval_minutes: Option<i64>,
 }
 
+/// Get application settings
 #[tauri::command]
-pub fn get_settings(state: State<'_, Arc<AppState>>) -> Result<AppSettings, String> {
-    state
-        .db
-        .with_connection(|conn| {
-            let mut stmt = conn.prepare(
-                "SELECT id, worktree_base_path, default_base_branch, agent_timeout_minutes,
-                        sync_interval_minutes, grpc_server_url, locale, created_at, updated_at
-                 FROM app_settings WHERE id = 1",
-            )?;
-
-            let settings = stmt.query_row([], |row| {
-                Ok(AppSettings {
-                    id: row.get(0)?,
-                    worktree_base_path: row.get(1)?,
-                    default_base_branch: row.get(2)?,
-                    agent_timeout_minutes: row.get(3)?,
-                    sync_interval_minutes: row.get(4)?,
-                    grpc_server_url: row.get(5)?,
-                    locale: row.get(6)?,
-                    created_at: row.get(7)?,
-                    updated_at: row.get(8)?,
-                })
-            })?;
-
-            Ok(settings)
-        })
-        .map_err(|e| e.to_string())
+pub async fn get_app_settings(db: State<'_, DbPool>) -> Result<AppSettings, AppError> {
+    let conn = db.get().map_err(|e| AppError::Internal(e.to_string()))?;
+    fetch_settings(&conn)
 }
 
+/// Fetch settings from connection (internal helper)
+fn fetch_settings(
+    conn: &r2d2::PooledConnection<r2d2_sqlite::SqliteConnectionManager>,
+) -> Result<AppSettings, AppError> {
+    conn.query_row(
+        "SELECT id, worktree_base_path, default_base_branch, agent_timeout_minutes,
+                sync_interval_minutes, created_at, updated_at
+         FROM app_settings WHERE id = 1",
+        [],
+        |row| {
+            Ok(AppSettings {
+                id: row.get(0)?,
+                worktree_base_path: row.get(1)?,
+                default_base_branch: row.get(2)?,
+                agent_timeout_minutes: row.get(3)?,
+                sync_interval_minutes: row.get(4)?,
+                created_at: row.get(5)?,
+                updated_at: row.get(6)?,
+            })
+        },
+    )
+    .map_err(|e| AppError::Internal(e.to_string()))
+}
+
+/// Validate and sanitize update request, returning validated values or None
+fn validate_update_request(
+    request: &UpdateSettingsRequest,
+) -> Result<UpdateSettingsRequest, AppError> {
+    let worktree_base_path = match &request.worktree_base_path {
+        Some(path) => {
+            let trimmed = path.trim();
+            if trimmed.is_empty() {
+                return Err(AppError::InvalidInput(
+                    "worktree_base_path cannot be empty".into(),
+                ));
+            }
+            Some(trimmed.to_string())
+        }
+        None => None,
+    };
+
+    let default_base_branch = match &request.default_base_branch {
+        Some(branch) => {
+            let trimmed = branch.trim();
+            if trimmed.is_empty() {
+                return Err(AppError::InvalidInput(
+                    "default_base_branch cannot be empty".into(),
+                ));
+            }
+            Some(trimmed.to_string())
+        }
+        None => None,
+    };
+
+    let agent_timeout_minutes = match request.agent_timeout_minutes {
+        Some(minutes) if minutes <= 0 => {
+            return Err(AppError::InvalidInput(
+                "agent_timeout_minutes must be a positive number".into(),
+            ));
+        }
+        other => other,
+    };
+
+    let sync_interval_minutes = match request.sync_interval_minutes {
+        Some(minutes) if minutes <= 0 => {
+            return Err(AppError::InvalidInput(
+                "sync_interval_minutes must be a positive number".into(),
+            ));
+        }
+        other => other,
+    };
+
+    Ok(UpdateSettingsRequest {
+        worktree_base_path,
+        default_base_branch,
+        agent_timeout_minutes,
+        sync_interval_minutes,
+    })
+}
+
+/// Update application settings
 #[tauri::command]
-pub fn update_settings(
-    state: State<'_, Arc<AppState>>,
+pub async fn update_app_settings(
     request: UpdateSettingsRequest,
-) -> Result<AppSettings, String> {
-    state
-        .db
-        .with_connection(|conn| {
-            let mut updates = Vec::new();
-            let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+    db: State<'_, DbPool>,
+) -> Result<AppSettings, AppError> {
+    let conn = db.get().map_err(|e| AppError::Internal(e.to_string()))?;
 
-            if let Some(ref path) = request.worktree_base_path {
-                updates.push("worktree_base_path = ?");
-                params.push(Box::new(path.clone()));
-            }
-            if let Some(ref branch) = request.default_base_branch {
-                updates.push("default_base_branch = ?");
-                params.push(Box::new(branch.clone()));
-            }
-            if let Some(timeout) = request.agent_timeout_minutes {
-                updates.push("agent_timeout_minutes = ?");
-                params.push(Box::new(timeout));
-            }
-            if let Some(interval) = request.sync_interval_minutes {
-                updates.push("sync_interval_minutes = ?");
-                params.push(Box::new(interval));
-            }
-            if let Some(ref url) = request.grpc_server_url {
-                updates.push("grpc_server_url = ?");
-                params.push(Box::new(url.clone()));
-            }
-            if let Some(ref locale) = request.locale {
-                updates.push("locale = ?");
-                params.push(Box::new(locale.clone()));
-            }
+    // Check if any updates requested
+    if request.worktree_base_path.is_none()
+        && request.default_base_branch.is_none()
+        && request.agent_timeout_minutes.is_none()
+        && request.sync_interval_minutes.is_none()
+    {
+        return fetch_settings(&conn);
+    }
 
-            if !updates.is_empty() {
-                updates.push("updated_at = datetime('now')");
-                let sql = format!(
-                    "UPDATE app_settings SET {} WHERE id = 1",
-                    updates.join(", ")
-                );
+    // Validate input before DB operations
+    let validated = validate_update_request(&request)?;
 
-                let params_ref: Vec<&dyn rusqlite::ToSql> =
-                    params.iter().map(|p| p.as_ref()).collect();
-                conn.execute(&sql, params_ref.as_slice())?;
-            }
+    // Use COALESCE to handle optional updates - if param is NULL, keep existing value
+    let sql = "UPDATE app_settings SET
+        worktree_base_path = COALESCE(:worktree_base_path, worktree_base_path),
+        default_base_branch = COALESCE(:default_base_branch, default_base_branch),
+        agent_timeout_minutes = COALESCE(:agent_timeout_minutes, agent_timeout_minutes),
+        sync_interval_minutes = COALESCE(:sync_interval_minutes, sync_interval_minutes),
+        updated_at = datetime('now')
+        WHERE id = 1";
 
-            // Return updated settings
-            let mut stmt = conn.prepare(
-                "SELECT id, worktree_base_path, default_base_branch, agent_timeout_minutes,
-                        sync_interval_minutes, grpc_server_url, locale, created_at, updated_at
-                 FROM app_settings WHERE id = 1",
-            )?;
+    let mut stmt = conn.prepare(sql)?;
 
-            let settings = stmt.query_row([], |row| {
-                Ok(AppSettings {
-                    id: row.get(0)?,
-                    worktree_base_path: row.get(1)?,
-                    default_base_branch: row.get(2)?,
-                    agent_timeout_minutes: row.get(3)?,
-                    sync_interval_minutes: row.get(4)?,
-                    grpc_server_url: row.get(5)?,
-                    locale: row.get(6)?,
-                    created_at: row.get(7)?,
-                    updated_at: row.get(8)?,
-                })
-            })?;
+    stmt.execute(rusqlite::named_params! {
+        ":worktree_base_path": validated.worktree_base_path,
+        ":default_base_branch": validated.default_base_branch,
+        ":agent_timeout_minutes": validated.agent_timeout_minutes,
+        ":sync_interval_minutes": validated.sync_interval_minutes,
+    })?;
 
-            Ok(settings)
-        })
-        .map_err(|e| e.to_string())
+    fetch_settings(&conn)
 }

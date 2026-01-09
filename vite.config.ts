@@ -1,7 +1,8 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
-import { paraglide } from "@inlang/paraglide-js/vite";
+// TODO: Re-enable paraglide when version is compatible with Vite 7
+// import { paraglide } from "@inlang/paraglide-js/vite";
 import path from "path";
 
 // @ts-expect-error process is a nodejs global
@@ -10,10 +11,11 @@ const host = process.env.TAURI_DEV_HOST;
 // https://vite.dev/config/
 export default defineConfig(async () => ({
   plugins: [
-    paraglide({
-      project: "./project.inlang",
-      outdir: "./src/paraglide",
-    }),
+    // TODO: Re-enable paraglide when version is compatible with Vite 7
+    // paraglide({
+    //   project: "./project.inlang",
+    //   outdir: "./src/paraglide",
+    // }),
     TanStackRouterVite(),
     react(),
   ],
