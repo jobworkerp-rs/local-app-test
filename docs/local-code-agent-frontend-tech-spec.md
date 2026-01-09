@@ -820,9 +820,9 @@ local-code-agent-frontend/
   "identifier": "com.local-code-agent",
   "build": {
     "frontendDist": "../dist",
-    "devUrl": "http://localhost:3000",
-    "beforeDevCommand": "pnpm run dev",
-    "beforeBuildCommand": "pnpm run build"
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pnpm build"
   },
   "app": {
     "windows": [
@@ -855,6 +855,7 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
+name = "local_code_agent_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -863,22 +864,29 @@ tonic-build = "0.12"
 
 [dependencies]
 tauri = { version = "2", features = ["devtools"] }
-tauri-plugin-shell = "2"
+tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 tonic = "0.12"
 prost = "0.13"
-rusqlite = { version = "0.32", features = ["bundled"] }
+prost-types = "0.13"
+rusqlite = { version = "0.34", features = ["bundled"] }
 r2d2 = "0.8"
 r2d2_sqlite = "0.25"
 aes-gcm = "0.10"
-rand = "0.8"
+rand = "0.9"
 keyring = "3"
+hex = "0.4"
 thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = "0.3"
 refinery = { version = "0.8", features = ["rusqlite"] }
+anyhow = "1"
+chrono = { version = "0.4", features = ["serde"] }
+futures = "0.3"
+async-trait = "0.1"
+directories = "5"
 ```
 
 ---
@@ -1117,8 +1125,7 @@ export function JobStreamViewer({ jobId }: JobStreamViewerProps) {
 
 ```typescript
 // components/issues/issue-list.tsx
-'use client';
-
+import { useState } from 'react';
 import { useIssues, useRelatedPRs } from '@/hooks/use-issues';
 import { useStartAgent } from '@/hooks/use-agent';
 import { IssueCard } from './issue-card';
@@ -1952,14 +1959,7 @@ Tauri v2ではケイパビリティベースのパーミッションシステム
 {
   "app": {
     "security": {
-      "csp": {
-        "default-src": "'self'",
-        "script-src": "'self'",
-        "style-src": "'self' 'unsafe-inline'",
-        "connect-src": "'self'",
-        "img-src": "'self' data: https:",
-        "font-src": "'self' data:"
-      }
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
     }
   }
 }
@@ -2281,7 +2281,7 @@ export default defineConfig({
   // Tauri環境でのViteサーバー設定
   clearScreen: false,
   server: {
-    port: 3000,
+    port: 1420,
     strictPort: true,
     // Tauri開発時はlocalhostのみ
     host: isTauri ? 'localhost' : '0.0.0.0',

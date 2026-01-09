@@ -24,7 +24,7 @@ serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 thiserror = "2"
 tracing = "0.1"
-tracing-subscriber = "0.3"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # gRPC client
 tonic = "0.12"
@@ -32,7 +32,10 @@ prost = "0.13"
 prost-types = "0.13"
 
 # Database
-rusqlite = { version = "0.34", features = ["bundled"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+r2d2 = "0.8"
+r2d2_sqlite = "0.25"
+refinery = { version = "0.8", features = ["rusqlite"] }
 
 # Encryption
 aes-gcm = "0.10"
