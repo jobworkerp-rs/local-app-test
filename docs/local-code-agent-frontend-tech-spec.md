@@ -2504,7 +2504,186 @@ Tauri v2の自動更新機能を使用する場合:
 
 ---
 
-## 13. 今後の拡張
+## 13. 国際化（i18n）
+
+### 13.1 技術選定
+
+**採用**: Paraglide JS (@inlang/paraglide-js)
+
+| 項目 | 値 |
+|------|-----|
+| バンドルサイズ | ~3-5 kB |
+| 型安全性 | コンパイル時検証 |
+| 対応言語 | 英語（en）、日本語（ja） |
+
+**選定理由**:
+- バンドルサイズ最小（Tauriデスクトップアプリに最適）
+- TypeScript型安全（翻訳キーと引数のコンパイル時検証）
+- TanStack Router公式統合例が存在
+- Viteプラグイン対応
+
+### 13.2 ディレクトリ構造
+
+```
+src/
+├── paraglide/              # 自動生成（.gitignore対象）
+│   ├── messages.js
+│   └── runtime.js
+├── messages/               # 翻訳ファイル
+│   ├── en.json             # 英語（デフォルト）
+│   └── ja.json             # 日本語
+└── components/
+    └── LanguageSwitcher.tsx
+project.inlang/
+└── settings.json           # Paraglide設定
+```
+
+### 13.3 設定ファイル
+
+**project.inlang/settings.json**:
+```json
+{
+  "$schema": "https://inlang.com/schema/project-settings",
+  "sourceLanguageTag": "en",
+  "languageTags": ["en", "ja"],
+  "modules": [
+    "https://cdn.jsdelivr.net/npm/@inlang/message-lint-rule-empty-pattern@latest/dist/index.js",
+    "https://cdn.jsdelivr.net/npm/@inlang/message-lint-rule-missing-translation@latest/dist/index.js",
+    "https://cdn.jsdelivr.net/npm/@inlang/plugin-message-format@latest/dist/index.js",
+    "https://cdn.jsdelivr.net/npm/@inlang/plugin-m-function-matcher@latest/dist/index.js"
+  ],
+  "plugin.inlang.messageFormat": {
+    "pathPattern": "./src/messages/{languageTag}.json"
+  }
+}
+```
+
+**vite.config.ts追加**:
+```typescript
+import { paraglideVitePlugin } from "@inlang/paraglide-js";
+
+export default defineConfig(async () => ({
+  plugins: [
+    paraglideVitePlugin({
+      project: "./project.inlang",
+      outdir: "./src/paraglide",
+    }),
+    TanStackRouterVite(),
+    react(),
+  ],
+  // ...
+}));
+```
+
+### 13.4 翻訳ファイル形式
+
+**src/messages/en.json**:
+```json
+{
+  "app_title": "Local Code Agent",
+  "nav_repositories": "Repositories",
+  "nav_jobs": "Jobs",
+  "nav_settings": "Settings",
+  "button_save": "Save",
+  "button_cancel": "Cancel",
+  "status_pending": "Pending",
+  "status_running": "Running",
+  "status_completed": "Completed",
+  "status_failed": "Failed"
+}
+```
+
+**src/messages/ja.json**:
+```json
+{
+  "app_title": "Local Code Agent",
+  "nav_repositories": "リポジトリ",
+  "nav_jobs": "ジョブ",
+  "nav_settings": "設定",
+  "button_save": "保存",
+  "button_cancel": "キャンセル",
+  "status_pending": "待機中",
+  "status_running": "実行中",
+  "status_completed": "完了",
+  "status_failed": "失敗"
+}
+```
+
+### 13.5 使用方法
+
+```typescript
+import * as m from '@/paraglide/messages';
+import { setLanguageTag, languageTag } from '@/paraglide/runtime';
+
+// 翻訳テキスト取得（型安全）
+const title = m.app_title();
+const saveButton = m.button_save();
+
+// 言語切り替え
+setLanguageTag('ja');
+
+// 現在の言語取得
+const currentLang = languageTag();
+```
+
+### 13.6 言語設定永続化
+
+```typescript
+// Tauri Store APIで永続化
+import { Store } from '@tauri-apps/plugin-store';
+
+const store = await Store.load('.settings.json');
+
+// 保存
+await store.set('locale', 'ja');
+await store.save();
+
+// 読み込み
+const savedLocale = await store.get<string>('locale');
+```
+
+**言語検出優先順位**:
+1. 保存済み設定（Tauri Store）
+2. システム言語（navigator.language）
+3. デフォルト言語（en）
+
+### 13.7 LanguageSwitcherコンポーネント
+
+```typescript
+// src/components/LanguageSwitcher.tsx
+import { languageTag, setLanguageTag, availableLanguageTags } from '@/paraglide/runtime';
+
+const LANGUAGE_NAMES: Record<string, string> = {
+  en: 'English',
+  ja: '日本語',
+};
+
+export function LanguageSwitcher() {
+  const currentLang = languageTag();
+
+  const handleChange = async (lang: string) => {
+    setLanguageTag(lang as 'en' | 'ja');
+    // Tauri Storeに保存
+    const store = await Store.load('.settings.json');
+    await store.set('locale', lang);
+    await store.save();
+  };
+
+  return (
+    <select value={currentLang} onChange={(e) => handleChange(e.target.value)}>
+      {availableLanguageTags.map((lang) => (
+        <option key={lang} value={lang}>
+          {LANGUAGE_NAMES[lang]}
+        </option>
+      ))}
+    </select>
+  );
+}
+```
+
+---
+
+## 14. 今後の拡張
 
 ### Phase 1（MVP）
 - プラットフォーム設定

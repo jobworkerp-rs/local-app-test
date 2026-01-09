@@ -100,8 +100,10 @@ mkdir -p src-tauri/src/{commands,grpc,db,crypto}
 ```
 
 #### P0-3: 依存関係設定
-- `package.json`: React 19、TanStack Router/Query、shadcn/ui
+- `package.json`: React 19、TanStack Router/Query、shadcn/ui、@inlang/paraglide-js
 - `Cargo.toml`: tonic、rusqlite、aes-gcm
+- `project.inlang/settings.json`: i18n設定ファイル作成
+- `src/messages/`: 初期翻訳ファイル（en.json, ja.json）作成
 
 #### P0-4: Proto定義のコピーとビルド設定
 ```bash
@@ -842,6 +844,12 @@ pnpm run test:e2e
 - [ ] README.md作成
 - [ ] 開発者ガイド
 - [ ] ユーザーガイド
+
+#### P5-5: 国際化（i18n）
+- [ ] 全UIテキストの翻訳キー化
+- [ ] LanguageSwitcherコンポーネント実装
+- [ ] 言語設定永続化（Tauri Store）
+- [ ] 翻訳レビュー・修正
 
 ### 成果物
 - [ ] 全機能が動作するアプリケーション
