@@ -37,6 +37,8 @@ rusqlite = { version = "0.34", features = ["bundled"] }
 # Encryption
 aes-gcm = "0.10"
 rand = "0.9"
+keyring = "3"
+hex = "0.4"
 
 # Utilities
 anyhow = "1"
