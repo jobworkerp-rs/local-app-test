@@ -40,13 +40,29 @@ function RepositoryPullsPage() {
         repository_id: numericRepoId,
         state: stateFilter,
       }),
-    enabled: isValidRepoId && !!repositoryQuery.data,
+    enabled: isValidRepoId && repositoryQuery.isSuccess,
   });
 
   if (!isValidRepoId) {
     return (
       <div className="container mx-auto p-8">
         <p className="text-red-600">Error: Invalid repository ID</p>
+      </div>
+    );
+  }
+
+  if (repositoryQuery.isLoading) {
+    return (
+      <div className="container mx-auto p-8">
+        <p>Loading repository...</p>
+      </div>
+    );
+  }
+
+  if (repositoryQuery.error) {
+    return (
+      <div className="container mx-auto p-8">
+        <p className="text-red-600">Error: {String(repositoryQuery.error)}</p>
       </div>
     );
   }
@@ -74,6 +90,7 @@ function RepositoryPullsPage() {
           <button
             key={state}
             type="button"
+            aria-pressed={stateFilter === state}
             onClick={() => setStateFilter(state)}
             className={`px-4 py-2 rounded ${
               stateFilter === state
