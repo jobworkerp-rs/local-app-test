@@ -111,7 +111,9 @@ function RepositoryIssuesPage() {
       ) : issuesQuery.data?.length === 0 ? (
         <div className="text-center py-12">
           <p className="text-gray-500">
-            No {stateFilter === "all" ? "" : stateFilter} issues found.
+            {stateFilter === "all"
+              ? "No issues found."
+              : `No ${stateFilter} issues found.`}
           </p>
         </div>
       ) : (
@@ -145,9 +147,11 @@ function IssueCard({ issue, repositoryId }: IssueCardProps) {
     staleTime: 60000, // Cache for 1 minute
   });
 
-  const relatedPrs = relatedPrsQuery.data ?? [];
-  const hasOpenPr = relatedPrs.some((pr) => pr.state === "open");
-  const hasMergedPr = relatedPrs.some((pr) => pr.merged);
+  // Only use data when query succeeded to avoid misclassifying loading/error as "0 PRs"
+  const relatedPrs = relatedPrsQuery.isSuccess ? relatedPrsQuery.data : [];
+  const hasOpenPr = relatedPrsQuery.isSuccess && relatedPrs.some((pr) => pr.state === "open");
+  const hasMergedPr = relatedPrsQuery.isSuccess && relatedPrs.some((pr) => pr.merged);
+  const hasRelatedPrs = relatedPrsQuery.isSuccess && relatedPrs.length > 0;
 
   return (
     <div className="border rounded-lg p-4 hover:shadow-md transition-shadow">
@@ -205,7 +209,7 @@ function IssueCard({ issue, repositoryId }: IssueCardProps) {
           </p>
 
           {/* Related PRs */}
-          {relatedPrs.length > 0 && (
+          {hasRelatedPrs && (
             <div className="mt-3 pt-3 border-t">
               <p className="text-sm text-gray-600 mb-1">Related PRs:</p>
               <div className="flex flex-wrap gap-2">
@@ -240,7 +244,7 @@ function IssueCard({ issue, repositoryId }: IssueCardProps) {
           >
             View
           </a>
-          {issue.state === "open" && relatedPrs.length === 0 && (
+          {issue.state === "open" && relatedPrsQuery.isSuccess && relatedPrs.length === 0 && (
             <button
               type="button"
               className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"

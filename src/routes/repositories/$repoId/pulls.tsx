@@ -111,7 +111,9 @@ function RepositoryPullsPage() {
       ) : pullsQuery.data?.length === 0 ? (
         <div className="text-center py-12">
           <p className="text-gray-500">
-            No {stateFilter === "all" ? "" : stateFilter} pull requests found.
+            {stateFilter === "all"
+              ? "No pull requests found."
+              : `No ${stateFilter} pull requests found.`}
           </p>
         </div>
       ) : (
