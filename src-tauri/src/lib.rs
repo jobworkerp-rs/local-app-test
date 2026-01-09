@@ -43,6 +43,7 @@ pub fn run() {
             commands::update_app_settings,
             commands::mcp_list_servers,
             commands::mcp_check_connection,
+            commands::mcp_create_runner,
             commands::list_jobs,
             commands::get_job,
             commands::list_repositories,

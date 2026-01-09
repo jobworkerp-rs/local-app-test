@@ -677,6 +677,21 @@ export interface CreatePlatformRequest {
   baseUrl: string;
   token: string;
 }
+
+/** MCPサーバー（Runner）動的作成リクエスト */
+export interface CreateMcpRunnerRequest {
+  platform: "GitHub" | "Gitea";
+  name: string;           // MCPサーバー識別名（ユーザー指定）
+  url: string;            // GitHub: "https://github.com"(デフォルト), Gitea: "https://gitea.example.com"
+  token: string;          // Personal Access Token
+}
+
+/** MCPサーバー情報 */
+export interface McpServerInfo {
+  name: string;
+  description: string | null;
+  transport: string;      // "stdio" | "sse"
+}
 ```
 
 ---
@@ -1031,6 +1046,164 @@ function JobDetailPage() {
 }
 ```
 
+#### リポジトリ登録フォーム（MCPサーバー選択/新規作成拡張）
+
+```typescript
+// routes/repositories.tsx (RepositoryFormコンポーネント部分)
+import { useState, type FormEvent } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { invoke } from "@tauri-apps/api/core";
+import type { McpServerInfo, CreateMcpRunnerRequest } from "@/types/models";
+
+interface RepositoryFormProps {
+  mcpServers: McpServerInfo[];
+  onSuccess: () => void;
+}
+
+function RepositoryForm({ mcpServers, onSuccess }: RepositoryFormProps) {
+  const queryClient = useQueryClient();
+  // MCPサーバー選択状態: 既存サーバー名 or "new"（新規作成）
+  const [mcpSelection, setMcpSelection] = useState<string>("");
+  // 新規MCPサーバー作成用フォームデータ
+  const [newMcpData, setNewMcpData] = useState<CreateMcpRunnerRequest>({
+    platform: "GitHub",
+    name: "",
+    url: "https://github.com",
+    token: "",
+  });
+
+  // MCPサーバー動的作成Mutation
+  const createMcpMutation = useMutation({
+    mutationFn: (request: CreateMcpRunnerRequest) =>
+      invoke<McpServerInfo>("mcp_create_runner", {
+        platform: request.platform,
+        name: request.name,
+        url: request.url,
+        token: request.token,
+      }),
+    onSuccess: (newServer) => {
+      // MCPサーバー一覧を再取得
+      queryClient.invalidateQueries({ queryKey: ["mcp-servers"] });
+      // 新規作成したサーバーを選択状態にする
+      setMcpSelection(newServer.name);
+    },
+  });
+
+  // プラットフォーム変更時のデフォルトURL設定
+  const handlePlatformChange = (platform: "GitHub" | "Gitea") => {
+    setNewMcpData({
+      ...newMcpData,
+      platform,
+      url: platform === "GitHub" ? "https://github.com" : "",
+    });
+  };
+
+  return (
+    <form className="border border-slate-200 dark:border-slate-700 rounded-lg p-6 mb-6">
+      {/* MCPサーバー選択 */}
+      <div className="mb-4">
+        <label className="block text-sm font-medium mb-1">MCPサーバー</label>
+        <select
+          value={mcpSelection}
+          onChange={(e) => setMcpSelection(e.target.value)}
+          className="w-full p-2 border rounded"
+          required
+        >
+          <option value="">選択してください</option>
+          {mcpServers.map((server) => (
+            <option key={server.name} value={server.name}>
+              {server.name}
+              {server.description ? ` - ${server.description}` : ""}
+            </option>
+          ))}
+          <option value="new">+ 新規MCPサーバー作成</option>
+        </select>
+      </div>
+
+      {/* 新規MCPサーバー作成フォーム（"new"選択時のみ表示） */}
+      {mcpSelection === "new" && (
+        <div className="border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4 bg-blue-50 dark:bg-blue-900/30">
+          <h3 className="text-lg font-semibold mb-3">新規MCPサーバー作成</h3>
+
+          {/* プラットフォーム選択 */}
+          <div className="mb-3">
+            <label className="block text-sm font-medium mb-1">プラットフォーム</label>
+            <select
+              value={newMcpData.platform}
+              onChange={(e) => handlePlatformChange(e.target.value as "GitHub" | "Gitea")}
+              className="w-full p-2 border rounded"
+            >
+              <option value="GitHub">GitHub</option>
+              <option value="Gitea">Gitea</option>
+            </select>
+          </div>
+
+          {/* サーバー識別名 */}
+          <div className="mb-3">
+            <label className="block text-sm font-medium mb-1">サーバー識別名</label>
+            <input
+              type="text"
+              value={newMcpData.name}
+              onChange={(e) => setNewMcpData({ ...newMcpData, name: e.target.value })}
+              placeholder="my-github-server"
+              className="w-full p-2 border rounded"
+              required
+            />
+          </div>
+
+          {/* URL */}
+          <div className="mb-3">
+            <label className="block text-sm font-medium mb-1">
+              URL
+              {newMcpData.platform === "GitHub" && (
+                <span className="text-gray-500 ml-2">(GitHub Enterpriseの場合は変更)</span>
+              )}
+            </label>
+            <input
+              type="url"
+              value={newMcpData.url}
+              onChange={(e) => setNewMcpData({ ...newMcpData, url: e.target.value })}
+              placeholder={newMcpData.platform === "GitHub" ? "https://github.com" : "https://gitea.example.com"}
+              className="w-full p-2 border rounded"
+              required
+            />
+          </div>
+
+          {/* Personal Access Token */}
+          <div className="mb-3">
+            <label className="block text-sm font-medium mb-1">Personal Access Token</label>
+            <input
+              type="password"
+              value={newMcpData.token}
+              onChange={(e) => setNewMcpData({ ...newMcpData, token: e.target.value })}
+              placeholder="ghp_xxxx... / gitea_token_xxxx..."
+              className="w-full p-2 border rounded"
+              required
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => createMcpMutation.mutate(newMcpData)}
+            disabled={createMcpMutation.isPending || !newMcpData.name || !newMcpData.token}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+          >
+            {createMcpMutation.isPending ? "作成中..." : "MCPサーバー作成"}
+          </button>
+
+          {createMcpMutation.isError && (
+            <p className="text-red-600 mt-2">エラー: {String(createMcpMutation.error)}</p>
+          )}
+        </div>
+      )}
+
+      {/* 以下、既存のリポジトリ登録フィールド（owner, repo_name, local_path等） */}
+      {/* ... */}
+    </form>
+  );
+}
+```
+
 ### 6.3 TanStack Query クエリ定義
 
 ```typescript
@@ -1263,6 +1436,37 @@ pub async fn mcp_list_repositories(
 ) -> Result<Vec<RepositoryInfo>, AppError> {
     // MCPサーバーのget_my_user_info + list_user_reposツールを呼び出し
     grpc.list_repositories_via_mcp(&server_name).await
+}
+
+/// GitHub/Gitea MCPサーバー（Runner）を動的登録
+/// TOML定義は内部でplatformに応じて自動生成（URLからscheme/hostを抽出）
+///
+/// Docker実行形式:
+/// - GitHub: `docker run ghcr.io/github/github-mcp-server` + GITHUB_PERSONAL_ACCESS_TOKEN, GITHUB_HOST（Enterprise時のみ）
+/// - Gitea: `docker run docker.gitea.com/gitea-mcp-server` + GITEA_ACCESS_TOKEN, GITEA_HOST, GITEA_INSECURE（http時のみ）
+#[tauri::command]
+pub async fn mcp_create_runner(
+    grpc: State<'_, Arc<JobworkerpClient>>,
+    platform: String,     // "GitHub" or "Gitea"
+    name: String,         // MCPサーバー識別名
+    url: String,          // URL (https://github.com, https://gitea.example.com)
+    token: String,        // Personal Access Token
+) -> Result<McpServerInfo, AppError> {
+    // platform に応じてTOML定義を内部生成（URLからscheme/hostを抽出）
+    let definition = match platform.as_str() {
+        "GitHub" => github_mcp_toml(&url, &token)?,
+        "Gitea" => gitea_mcp_toml(&url, &token)?,
+        _ => return Err(AppError::InvalidInput(format!("Unsupported platform: {}", platform))),
+    };
+
+    // gRPC経由でRunner登録
+    grpc.create_runner(&name, &definition).await?;
+
+    Ok(McpServerInfo {
+        name,
+        description: Some(format!("{} MCP Server", platform)),
+        transport: "stdio".to_string(),
+    })
 }
 
 // --- 以下、JobworkerpClient内の実装詳細 ---

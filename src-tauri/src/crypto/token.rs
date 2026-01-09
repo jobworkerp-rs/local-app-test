@@ -29,8 +29,7 @@ impl TokenCrypto {
     /// Create TokenCrypto with key from keychain or generate new one
     pub fn new() -> Result<Self, CryptoError> {
         let key = Self::get_or_generate_key()?;
-        let cipher =
-            Aes256Gcm::new_from_slice(&key).map_err(|_| CryptoError::EncryptionFailed)?;
+        let cipher = Aes256Gcm::new_from_slice(&key).map_err(|_| CryptoError::EncryptionFailed)?;
         Ok(Self { cipher })
     }
 
@@ -90,7 +89,10 @@ impl TokenCrypto {
                 path.to_str().unwrap_or_default(),
                 "/inheritance:r",
                 "/grant:r",
-                &format!("{}:F", std::env::var("USERNAME").unwrap_or_else(|_| "SYSTEM".to_string())),
+                &format!(
+                    "{}:F",
+                    std::env::var("USERNAME").unwrap_or_else(|_| "SYSTEM".to_string())
+                ),
             ])
             .output();
 
@@ -193,7 +195,6 @@ impl TokenCrypto {
         String::from_utf8(plaintext).map_err(|_| CryptoError::DecryptionFailed)
     }
 }
-
 
 #[cfg(test)]
 mod tests {

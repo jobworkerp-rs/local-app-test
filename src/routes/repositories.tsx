@@ -6,6 +6,7 @@ import {
   type Repository,
   type CreateRepositoryRequest,
   type McpServerInfo,
+  type CreateMcpRunnerRequest,
   getGiteaWebBaseUrl,
 } from "@/types/models";
 
@@ -175,6 +176,19 @@ interface RepositoryFormProps {
 }
 
 function RepositoryForm({ mcpServers, onSuccess }: RepositoryFormProps) {
+  const queryClient = useQueryClient();
+
+  // MCP server selection: existing server name, "new" for creating new, or empty
+  const [mcpSelection, setMcpSelection] = useState<string>("");
+
+  // New MCP server creation form data
+  const [newMcpData, setNewMcpData] = useState<CreateMcpRunnerRequest>({
+    platform: "GitHub",
+    name: "",
+    url: "https://github.com",
+    token: "",
+  });
+
   const [formData, setFormData] = useState<CreateRepositoryRequest>({
     mcp_server_name: "",
     platform: "GitHub",
@@ -186,6 +200,31 @@ function RepositoryForm({ mcpServers, onSuccess }: RepositoryFormProps) {
     local_path: null,
   });
 
+  // MCP server creation mutation
+  const createMcpMutation = useMutation({
+    mutationFn: (request: CreateMcpRunnerRequest) =>
+      invoke<McpServerInfo>("mcp_create_runner", {
+        platform: request.platform,
+        name: request.name,
+        url: request.url,
+        token: request.token,
+      }),
+    onSuccess: (newServer) => {
+      // Refresh MCP server list
+      queryClient.invalidateQueries({ queryKey: ["mcp-servers"] });
+      // Select the newly created server
+      setMcpSelection(newServer.name);
+      setFormData((prev) => ({ ...prev, mcp_server_name: newServer.name }));
+      // Reset new MCP form
+      setNewMcpData({
+        platform: "GitHub",
+        name: "",
+        url: "https://github.com",
+        token: "",
+      });
+    },
+  });
+
   const createMutation = useMutation({
     mutationFn: (request: CreateRepositoryRequest) =>
       invoke<Repository>("create_repository", { request }),
@@ -193,6 +232,23 @@ function RepositoryForm({ mcpServers, onSuccess }: RepositoryFormProps) {
       onSuccess();
     },
   });
+
+  // Handle MCP server selection change
+  const handleMcpSelectionChange = (value: string) => {
+    setMcpSelection(value);
+    if (value !== "new") {
+      setFormData((prev) => ({ ...prev, mcp_server_name: value }));
+    }
+  };
+
+  // Handle new MCP platform change
+  const handleNewMcpPlatformChange = (platform: "GitHub" | "Gitea") => {
+    setNewMcpData({
+      ...newMcpData,
+      platform,
+      url: platform === "GitHub" ? "https://github.com" : "",
+    });
+  };
 
   const handlePlatformChange = (platform: "GitHub" | "Gitea") => {
     setFormData({
@@ -221,133 +277,234 @@ function RepositoryForm({ mcpServers, onSuccess }: RepositoryFormProps) {
     createMutation.mutate(formData);
   };
 
+  // Check if the form can be submitted
+  const canSubmit = mcpSelection !== "" && mcpSelection !== "new" && formData.mcp_server_name !== "";
+
   return (
     <form onSubmit={handleSubmit} className="border border-slate-200 dark:border-slate-700 rounded-lg p-6 mb-6 bg-gray-50 dark:bg-slate-800">
       <h2 className="text-xl font-semibold mb-4">Add Repository</h2>
 
-      <div className="grid grid-cols-2 gap-4 mb-4">
-        <div>
-          <label htmlFor="mcp_server_name" className="block text-sm font-medium mb-1">
-            MCP Server
-          </label>
-          <select
-            id="mcp_server_name"
-            value={formData.mcp_server_name}
-            onChange={(e) => setFormData({ ...formData, mcp_server_name: e.target.value })}
-            className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
-            required
-          >
-            <option value="">Select MCP Server</option>
-            {mcpServers.map((server) => (
-              <option key={server.name} value={server.name}>
-                {server.name}
-                {server.description ? ` - ${server.description}` : ""}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label htmlFor="platform" className="block text-sm font-medium mb-1">
-            Platform
-          </label>
-          <select
-            id="platform"
-            value={formData.platform}
-            onChange={(e) => handlePlatformChange(e.target.value as "GitHub" | "Gitea")}
-            className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
-          >
-            <option value="GitHub">GitHub</option>
-            <option value="Gitea">Gitea</option>
-          </select>
-        </div>
-      </div>
-
-      {formData.platform === "Gitea" && (
-        <div className="mb-4">
-          <label htmlFor="base_url" className="block text-sm font-medium mb-1">
-            Gitea API URL
-          </label>
-          <input
-            id="base_url"
-            type="url"
-            value={formData.base_url}
-            onChange={(e) => setFormData({ ...formData, base_url: e.target.value })}
-            placeholder="https://gitea.example.com/api/v1"
-            className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-            required
-          />
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-4 mb-4">
-        <div>
-          <label htmlFor="owner" className="block text-sm font-medium mb-1">
-            Owner
-          </label>
-          <input
-            id="owner"
-            type="text"
-            value={formData.owner}
-            onChange={(e) => handleOwnerRepoChange(e.target.value, formData.repo_name)}
-            placeholder="owner"
-            className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-            required
-          />
-        </div>
-
-        <div>
-          <label htmlFor="repo_name" className="block text-sm font-medium mb-1">
-            Repository Name
-          </label>
-          <input
-            id="repo_name"
-            type="text"
-            value={formData.repo_name}
-            onChange={(e) => handleOwnerRepoChange(formData.owner, e.target.value)}
-            placeholder="repo-name"
-            className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-            required
-          />
-        </div>
-      </div>
-
+      {/* MCP Server Selection */}
       <div className="mb-4">
-        <label htmlFor="local_path" className="block text-sm font-medium mb-1">
-          Local Clone Path (optional)
+        <label htmlFor="mcp_selection" className="block text-sm font-medium mb-1">
+          MCP Server
         </label>
-        <input
-          id="local_path"
-          type="text"
-          value={formData.local_path ?? ""}
-          onChange={(e) =>
-            setFormData({ ...formData, local_path: e.target.value || null })
-          }
-          placeholder="/path/to/local/clone"
-          className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-        />
+        <select
+          id="mcp_selection"
+          value={mcpSelection}
+          onChange={(e) => handleMcpSelectionChange(e.target.value)}
+          className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+          required
+        >
+          <option value="">Select MCP Server</option>
+          {mcpServers.map((server) => (
+            <option key={server.name} value={server.name}>
+              {server.name}
+              {server.description ? ` - ${server.description}` : ""}
+            </option>
+          ))}
+          <option value="new">+ Create New MCP Server</option>
+        </select>
       </div>
 
-      {formData.url && (
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-          Repository URL: {formData.url}
-        </p>
+      {/* New MCP Server Creation Form */}
+      {mcpSelection === "new" && (
+        <div className="border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4 bg-blue-50 dark:bg-blue-900/30">
+          <h3 className="text-lg font-semibold mb-3">Create New MCP Server</h3>
+
+          {/* Platform Selection */}
+          <div className="mb-3">
+            <label htmlFor="new_mcp_platform" className="block text-sm font-medium mb-1">
+              Platform
+            </label>
+            <select
+              id="new_mcp_platform"
+              value={newMcpData.platform}
+              onChange={(e) => handleNewMcpPlatformChange(e.target.value as "GitHub" | "Gitea")}
+              className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+            >
+              <option value="GitHub">GitHub</option>
+              <option value="Gitea">Gitea</option>
+            </select>
+          </div>
+
+          {/* Server Name */}
+          <div className="mb-3">
+            <label htmlFor="new_mcp_name" className="block text-sm font-medium mb-1">
+              Server Name
+            </label>
+            <input
+              id="new_mcp_name"
+              type="text"
+              value={newMcpData.name}
+              onChange={(e) => setNewMcpData({ ...newMcpData, name: e.target.value })}
+              placeholder="my-github-server"
+              className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+              required
+            />
+          </div>
+
+          {/* URL */}
+          <div className="mb-3">
+            <label htmlFor="new_mcp_url" className="block text-sm font-medium mb-1">
+              URL
+              {newMcpData.platform === "GitHub" && (
+                <span className="text-gray-500 dark:text-gray-400 ml-2 font-normal">
+                  (Change for GitHub Enterprise)
+                </span>
+              )}
+            </label>
+            <input
+              id="new_mcp_url"
+              type="url"
+              value={newMcpData.url}
+              onChange={(e) => setNewMcpData({ ...newMcpData, url: e.target.value })}
+              placeholder={newMcpData.platform === "GitHub" ? "https://github.com" : "https://gitea.example.com"}
+              className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+              required
+            />
+          </div>
+
+          {/* Personal Access Token */}
+          <div className="mb-3">
+            <label htmlFor="new_mcp_token" className="block text-sm font-medium mb-1">
+              Personal Access Token
+            </label>
+            <input
+              id="new_mcp_token"
+              type="password"
+              value={newMcpData.token}
+              onChange={(e) => setNewMcpData({ ...newMcpData, token: e.target.value })}
+              placeholder="ghp_xxxx... / gitea_token_xxxx..."
+              className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+              required
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => createMcpMutation.mutate(newMcpData)}
+            disabled={createMcpMutation.isPending || !newMcpData.name || !newMcpData.token || !newMcpData.url}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+          >
+            {createMcpMutation.isPending ? "Creating..." : "Create MCP Server"}
+          </button>
+
+          {createMcpMutation.isError && (
+            <p className="text-red-600 dark:text-red-400 mt-2">
+              Error: {String(createMcpMutation.error)}
+            </p>
+          )}
+        </div>
       )}
 
-      <div className="flex gap-2">
-        <button
-          type="submit"
-          disabled={createMutation.isPending}
-          className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
-        >
-          {createMutation.isPending ? "Creating..." : "Create"}
-        </button>
-      </div>
+      {/* Repository Details (only show when MCP server is selected) */}
+      {mcpSelection !== "" && mcpSelection !== "new" && (
+        <>
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <label htmlFor="platform" className="block text-sm font-medium mb-1">
+                Platform
+              </label>
+              <select
+                id="platform"
+                value={formData.platform}
+                onChange={(e) => handlePlatformChange(e.target.value as "GitHub" | "Gitea")}
+                className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+              >
+                <option value="GitHub">GitHub</option>
+                <option value="Gitea">Gitea</option>
+              </select>
+            </div>
+          </div>
 
-      {createMutation.isError && (
-        <p className="text-red-600 dark:text-red-400 mt-2">
-          Error: {String(createMutation.error)}
-        </p>
+          {formData.platform === "Gitea" && (
+            <div className="mb-4">
+              <label htmlFor="base_url" className="block text-sm font-medium mb-1">
+                Gitea API URL
+              </label>
+              <input
+                id="base_url"
+                type="url"
+                value={formData.base_url}
+                onChange={(e) => setFormData({ ...formData, base_url: e.target.value })}
+                placeholder="https://gitea.example.com/api/v1"
+                className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                required
+              />
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <label htmlFor="owner" className="block text-sm font-medium mb-1">
+                Owner
+              </label>
+              <input
+                id="owner"
+                type="text"
+                value={formData.owner}
+                onChange={(e) => handleOwnerRepoChange(e.target.value, formData.repo_name)}
+                placeholder="owner"
+                className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                required
+              />
+            </div>
+
+            <div>
+              <label htmlFor="repo_name" className="block text-sm font-medium mb-1">
+                Repository Name
+              </label>
+              <input
+                id="repo_name"
+                type="text"
+                value={formData.repo_name}
+                onChange={(e) => handleOwnerRepoChange(formData.owner, e.target.value)}
+                placeholder="repo-name"
+                className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <label htmlFor="local_path" className="block text-sm font-medium mb-1">
+              Local Clone Path (optional)
+            </label>
+            <input
+              id="local_path"
+              type="text"
+              value={formData.local_path ?? ""}
+              onChange={(e) =>
+                setFormData({ ...formData, local_path: e.target.value || null })
+              }
+              placeholder="/path/to/local/clone"
+              className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+            />
+          </div>
+
+          {formData.url && (
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              Repository URL: {formData.url}
+            </p>
+          )}
+
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={createMutation.isPending || !canSubmit}
+              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+            >
+              {createMutation.isPending ? "Creating..." : "Create"}
+            </button>
+          </div>
+
+          {createMutation.isError && (
+            <p className="text-red-600 dark:text-red-400 mt-2">
+              Error: {String(createMutation.error)}
+            </p>
+          )}
+        </>
       )}
     </form>
   );

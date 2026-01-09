@@ -138,7 +138,9 @@ pub async fn list_issues(
         "state": state.unwrap_or_else(|| "open".to_string()),
     });
 
-    let result = grpc.call_mcp_tool(&repo.mcp_server_name, tool_name, &args).await?;
+    let result = grpc
+        .call_mcp_tool(&repo.mcp_server_name, tool_name, &args)
+        .await?;
     extract_issues_from_result(&result)
 }
 
@@ -159,7 +161,9 @@ pub async fn get_issue(
         "issue_number": issue_number,
     });
 
-    let result = grpc.call_mcp_tool(&repo.mcp_server_name, tool_name, &args).await?;
+    let result = grpc
+        .call_mcp_tool(&repo.mcp_server_name, tool_name, &args)
+        .await?;
 
     // Try to extract from MCP content structure first
     if let Some(content) = result.get("content").and_then(|c| c.as_array()) {
@@ -175,5 +179,6 @@ pub async fn get_issue(
     }
 
     // Direct format
-    parse_issue(&result).ok_or_else(|| AppError::NotFound(format!("Issue #{} not found", issue_number)))
+    parse_issue(&result)
+        .ok_or_else(|| AppError::NotFound(format!("Issue #{} not found", issue_number)))
 }

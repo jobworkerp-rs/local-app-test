@@ -169,7 +169,9 @@ pub async fn list_pulls(
         "state": state.unwrap_or_else(|| "open".to_string()),
     });
 
-    let result = grpc.call_mcp_tool(&repo.mcp_server_name, tool_name, &args).await?;
+    let result = grpc
+        .call_mcp_tool(&repo.mcp_server_name, tool_name, &args)
+        .await?;
     extract_pulls_from_result(&result)
 }
 
@@ -191,7 +193,9 @@ pub async fn find_related_prs(
         "state": "all",
     });
 
-    let result = grpc.call_mcp_tool(&repo.mcp_server_name, tool_name, &args).await?;
+    let result = grpc
+        .call_mcp_tool(&repo.mcp_server_name, tool_name, &args)
+        .await?;
     let all_prs = extract_pulls_from_result(&result)?;
 
     // Filter to related PRs

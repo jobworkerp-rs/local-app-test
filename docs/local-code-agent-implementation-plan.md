@@ -338,6 +338,63 @@ pub async fn find_related_prs(
 ) -> Result<Vec<PullRequest>, AppError>;
 ```
 
+#### P2-4: gRPC Runner/Worker管理メソッド
+
+```rust
+// src-tauri/src/grpc/client.rs に追加
+
+impl JobworkerpClient {
+    // Runner管理
+    pub async fn find_runner_by_name(&self, name: &str) -> Result<Option<data::Runner>, AppError>;
+    pub async fn create_runner(&self, data: data::RunnerData) -> Result<i64, AppError>;
+
+    // Worker管理
+    pub async fn find_worker_by_name(&self, name: &str) -> Result<Option<data::Worker>, AppError>;
+    pub async fn create_worker(&self, data: data::WorkerData) -> Result<i64, AppError>;
+
+    // 自動プロビジョニング（核心）
+    /// MCPツール呼び出し時にWorkerが存在しない場合、自動的に作成する
+    /// 1. Worker を名前で検索 → 存在すれば返す
+    /// 2. Runner を名前で検索 → 存在しなければエラー（Runnerは事前登録必須）
+    /// 3. Worker を作成（Runner IDを参照、Runner名と同一名）
+    /// 4. 作成したWorkerを返す
+    pub async fn ensure_mcp_worker(&self, mcp_server_name: &str) -> Result<data::Worker, AppError>;
+}
+```
+
+#### P2-5: MCPサーバー（Runner）動的登録コマンド
+
+```rust
+// src-tauri/src/commands/mcp.rs に追加
+
+/// GitHub/Gitea MCPサーバー（Runner）を動的登録
+/// TOML定義は内部でplatformに応じて自動生成（URLからscheme/hostを抽出）
+#[tauri::command]
+pub async fn mcp_create_runner(
+    grpc: State<'_, Arc<JobworkerpClient>>,
+    platform: String,     // "GitHub" or "Gitea"
+    name: String,         // MCPサーバー識別名
+    url: String,          // URL (https://github.com, https://gitea.example.com)
+    token: String,        // Personal Access Token
+) -> Result<McpServerInfo, AppError>;
+```
+
+**TOML生成（Docker実行形式）:**
+- GitHub: `docker run ghcr.io/github/github-mcp-server` + GITHUB_PERSONAL_ACCESS_TOKEN, GITHUB_HOST（Enterprise時のみ）
+- Gitea: `docker run docker.gitea.com/gitea-mcp-server` + GITEA_ACCESS_TOKEN, GITEA_HOST, GITEA_INSECURE（http時のみ）
+
+#### P2-6: リポジトリ登録フォーム拡張
+
+リポジトリ登録時にMCPサーバーの選択/新規作成を可能にする。
+
+**UIフロー:**
+1. MCPサーバー選択ドロップダウン（既存の`mcp_list_servers`結果を表示）
+2. 「新規MCPサーバー作成」オプション選択時にフォームを展開
+   - プラットフォーム選択（GitHub / Gitea）
+   - サーバー識別名
+   - URL（GitHubはデフォルト`https://github.com`、GitHub Enterpriseは変更可、Giteaは必須入力）
+   - Personal Access Token
+
 **MCP呼び出し実装パターン:**
 ```rust
 impl JobworkerpClient {
@@ -347,8 +404,8 @@ impl JobworkerpClient {
         tool_name: &str,
         args: serde_json::Value,
     ) -> Result<T, AppError> {
-        // 1. MCPサーバー対応ワーカーを検索
-        let worker = self.find_worker_by_runner_name(server_name).await?;
+        // 1. Workerを確保（存在しなければ自動作成）
+        let worker = self.ensure_mcp_worker(server_name).await?;
 
         // 2. ジョブを投入
         let request = proto::JobRequest {
@@ -370,7 +427,7 @@ impl JobworkerpClient {
 }
 ```
 
-#### P2-4: フロントエンド基本画面
+#### P2-7: フロントエンド基本画面
 
 **TanStack Router設定:**
 ```typescript
@@ -395,6 +452,10 @@ pnpm dlx shadcn@latest add button card dialog table badge
 - [x] リポジトリ登録・一覧表示
 - [x] Issue一覧表示（フィルタリング可能）
 - [x] 関連PR検出・警告表示
+- [ ] Runner/Worker管理メソッド（gRPCクライアント拡張）
+- [ ] MCPサーバー（Runner）動的登録機能
+- [ ] Worker自動作成機能（ensure_mcp_worker）
+- [ ] リポジトリ登録フォーム拡張（MCPサーバー選択/新規作成UI）
 
 ---
 
