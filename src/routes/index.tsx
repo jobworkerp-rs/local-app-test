@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -45,24 +45,24 @@ function HomePage() {
         </section>
 
         <nav className="space-y-2">
-          <a
-            href="/settings"
+          <Link
+            to="/settings"
             className="block p-3 border rounded hover:bg-accent transition-colors"
           >
             Settings
-          </a>
-          <a
-            href="/repositories"
+          </Link>
+          <Link
+            to="/repositories"
             className="block p-3 border rounded hover:bg-accent transition-colors"
           >
             Repositories
-          </a>
-          <a
-            href="/jobs"
+          </Link>
+          <Link
+            to="/jobs"
             className="block p-3 border rounded hover:bg-accent transition-colors"
           >
             Agent Jobs
-          </a>
+          </Link>
         </nav>
       </div>
     </div>
