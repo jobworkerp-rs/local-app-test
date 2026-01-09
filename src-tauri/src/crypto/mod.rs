@@ -2,12 +2,15 @@ use aes_gcm::{
     aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,
 };
+use keyring::Entry;
 use rand::RngCore;
 
 use crate::error::{AppError, AppResult};
 
 const NONCE_SIZE: usize = 12;
 const KEY_SIZE: usize = 32;
+const KEYRING_SERVICE: &str = "local-code-agent";
+const KEYRING_USER: &str = "encryption-key";
 
 #[derive(Clone)]
 pub struct TokenCrypto {
@@ -23,11 +26,42 @@ impl TokenCrypto {
     }
 
     fn get_or_create_key() -> AppResult<[u8; KEY_SIZE]> {
-        // For now, generate a random key each time
-        // TODO: Store in OS keychain or derive from machine-specific data
-        let mut key = [0u8; KEY_SIZE];
-        rand::rng().fill_bytes(&mut key);
-        Ok(key)
+        let entry = Entry::new(KEYRING_SERVICE, KEYRING_USER)
+            .map_err(|e| AppError::Crypto(format!("Failed to access keyring: {}", e)))?;
+
+        // Try to get existing key
+        match entry.get_password() {
+            Ok(hex_key) => {
+                let key_bytes = hex::decode(&hex_key)
+                    .map_err(|e| AppError::Crypto(format!("Invalid key format: {}", e)))?;
+
+                if key_bytes.len() != KEY_SIZE {
+                    return Err(AppError::Crypto(format!(
+                        "Invalid key length: expected {}, got {}",
+                        KEY_SIZE,
+                        key_bytes.len()
+                    )));
+                }
+
+                let mut key = [0u8; KEY_SIZE];
+                key.copy_from_slice(&key_bytes);
+                Ok(key)
+            }
+            Err(keyring::Error::NoEntry) => {
+                // Generate new key
+                let mut key = [0u8; KEY_SIZE];
+                rand::rng().fill_bytes(&mut key);
+
+                // Store in keyring
+                let hex_key = hex::encode(key);
+                entry
+                    .set_password(&hex_key)
+                    .map_err(|e| AppError::Crypto(format!("Failed to store key: {}", e)))?;
+
+                Ok(key)
+            }
+            Err(e) => Err(AppError::Crypto(format!("Keyring error: {}", e))),
+        }
     }
 
     pub fn encrypt(&self, plaintext: &str) -> AppResult<Vec<u8>> {
@@ -74,6 +108,20 @@ mod tests {
 
         let encrypted = crypto.encrypt(plaintext).unwrap();
         let decrypted = crypto.decrypt(&encrypted).unwrap();
+
+        assert_eq!(plaintext, decrypted);
+    }
+
+    #[test]
+    fn test_key_persistence() {
+        // First instance creates key
+        let crypto1 = TokenCrypto::new().unwrap();
+        let plaintext = "persistent-token";
+        let encrypted = crypto1.encrypt(plaintext).unwrap();
+
+        // Second instance should use same key
+        let crypto2 = TokenCrypto::new().unwrap();
+        let decrypted = crypto2.decrypt(&encrypted).unwrap();
 
         assert_eq!(plaintext, decrypted);
     }

@@ -38,9 +38,10 @@ impl Database {
     }
 
     fn run_migrations(&self) -> AppResult<()> {
-        let conn = self.conn.lock().map_err(|e| {
-            AppError::Database(rusqlite::Error::InvalidParameterName(e.to_string()))
-        })?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| AppError::Internal(format!("Database mutex poisoned: {}", e)))?;
 
         conn.execute_batch(migrations::INITIAL_MIGRATION)?;
 
@@ -51,9 +52,10 @@ impl Database {
     where
         F: FnOnce(&Connection) -> AppResult<T>,
     {
-        let conn = self.conn.lock().map_err(|e| {
-            AppError::Database(rusqlite::Error::InvalidParameterName(e.to_string()))
-        })?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| AppError::Internal(format!("Database mutex poisoned: {}", e)))?;
         f(&conn)
     }
 }
