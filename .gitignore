@@ -38,6 +38,7 @@ coverage/
 # Generated
 *.gen.ts
 routeTree.gen.ts
+src/paraglide/
 
 # Tauri dev artifacts
 .tauri/
