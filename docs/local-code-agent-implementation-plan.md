@@ -114,9 +114,9 @@ cp -r ../proto/protobuf src-tauri/proto/
 ```
 
 ### 成果物
-- [ ] 起動可能なTauriアプリケーション（空のウィンドウ）
-- [ ] Proto生成が動作すること
-- [ ] CI基本設定（lint、型チェック）
+- [x] 起動可能なTauriアプリケーション（空のウィンドウ）
+- [x] Proto生成が動作すること
+- [x] CI基本設定（lint、型チェック）
 
 ---
 
@@ -249,9 +249,9 @@ pub async fn get_app_settings(
 ```
 
 ### 成果物
-- [ ] SQLiteマイグレーション動作
-- [ ] jobworkerp-rsへの接続確認成功
-- [ ] Tauri Commandsの基本パターン確立
+- [x] SQLiteマイグレーション動作
+- [x] jobworkerp-rsへの接続確認成功
+- [x] Tauri Commandsの基本パターン確立
 
 ---
 
@@ -391,10 +391,10 @@ pnpm dlx shadcn@latest add button card dialog table badge
 ```
 
 ### 成果物
-- [ ] MCPサーバー一覧表示
-- [ ] リポジトリ登録・一覧表示
-- [ ] Issue一覧表示（フィルタリング可能）
-- [ ] 関連PR検出・警告表示
+- [x] MCPサーバー一覧表示
+- [x] リポジトリ登録・一覧表示
+- [x] Issue一覧表示（フィルタリング可能）
+- [x] 関連PR検出・警告表示
 
 ---
 

@@ -586,7 +586,8 @@ output:
 | 機能 | GitHub MCP | Gitea MCP |
 |------|------------|-----------|
 | Issue一覧 | `list_issues` | `list_repo_issues` |
-| Issue詳細（読取） | `issue_read` | `get_issue_by_index` |
+| Issue詳細（読取） | `issue_read` (method="get") | `get_issue_by_index` |
+| Issueコメント取得 | `issue_read` (method="get_comments") | `list_issue_comments` |
 | Issueコメント追加 | `add_issue_comment` | `create_issue_comment` |
 | Issue検索 | `search_issues` | - |
 | PR一覧 | `list_pull_requests` | `list_repo_pull_requests` |
@@ -831,7 +832,7 @@ do:
                   args: "${[\"-C\", .local_repo_path, \"worktree\", \"add\", $worktree_path, \"-b\", $branch_name]}"
 
         # 2.2 Issue情報取得
-        # Note: GitHub MCP v1.0.0+では issue_read を使用
+        # Note: GitHub MCP v1.0.0+では issue_read を使用、method="get"でissue詳細取得
         - fetchIssue:
             run:
               runner:
@@ -841,22 +842,23 @@ do:
                   owner: "${.owner}"
                   repo: "${.repo}"
                   issue_number: "${.issue_number}"
+                  method: "get"
             export:
               as:
                 issue_body: "${.body}"
 
         # 2.3 Issueコメント取得
-        # Note: GitHub MCP v1.0.0+では issue_read にコメントが含まれる場合あり
-        # 別途取得が必要な場合はsearch_issuesやGraphQL toolsetを検討
+        # Note: GitHub MCP v1.0.0+では issue_read の method="get_comments" でコメント取得
         - fetchIssueComments:
             run:
               runner:
                 name: "${.mcp_server}"
-                using: "add_issue_comment"  # コメント一覧取得ツールは要確認
+                using: "issue_read"
                 arguments:
                   owner: "${.owner}"
                   repo: "${.repo}"
                   issue_number: "${.issue_number}"
+                  method: "get_comments"
             export:
               as:
                 issue_comments: "${.}"

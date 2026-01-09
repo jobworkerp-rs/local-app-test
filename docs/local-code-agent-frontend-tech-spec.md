@@ -2361,17 +2361,17 @@ export default defineConfig({
     "@biomejs/biome": "^1.9.0",
     "@playwright/test": "^1.49.0",
     "@tauri-apps/cli": "^2.0.0",
-    "@tanstack/router-plugin": "^1.95.0",
+    "@tanstack/router-plugin": "^1.146.0",
     "@testing-library/react": "^16.1.0",
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
-    "@vitejs/plugin-react": "^4.4.0",
-    "autoprefixer": "^10.4.20",
-    "postcss": "^8.4.49",
-    "tailwindcss": "^4.0.0",
-    "typescript": "^5.7.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^4.6.0",
+    "autoprefixer": "^10.4.23",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.0",
+    "typescript": "^5.8.0",
     "vite": "^7.0.0",
-    "vitest": "^3.0.0"
+    "vitest": "^4.0.0"
   },
   "engines": {
     "node": ">=20.19.0 || >=22.12.0"
@@ -2382,7 +2382,7 @@ export default defineConfig({
 **バージョン選定方針**:
 - `@tanstack/react-form`: 0.x系は破壊的変更が頻繁なため、パッチバージョンのみ許可（`~`）
 - `vite`: 最新安定版（7.x）を使用
-- `vitest`: viteメジャーバージョン-4を使用（vite 7.x には vitest 3.x）
+- `vitest`: viteメジャーバージョン-3を使用（vite 7.x には vitest 4.x）
 - `tailwindcss`: 4.x安定版を使用
 
 ### 11.6 Rust Proto生成設定
