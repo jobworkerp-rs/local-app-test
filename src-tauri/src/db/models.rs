@@ -141,3 +141,32 @@ pub struct CreateAgentJob {
     pub issue_number: i32,
     pub jobworkerp_job_id: String,
 }
+
+/// Issue from GitHub/Gitea (not persisted to DB)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Issue {
+    pub number: i32,
+    pub title: String,
+    pub body: Option<String>,
+    pub state: String,
+    pub labels: Vec<String>,
+    pub user: String,
+    pub html_url: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// Pull Request from GitHub/Gitea (not persisted to DB)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PullRequest {
+    pub number: i32,
+    pub title: String,
+    pub body: Option<String>,
+    pub state: String,
+    pub head_branch: String,
+    pub base_branch: String,
+    pub html_url: String,
+    pub merged: bool,
+    pub created_at: String,
+    pub updated_at: String,
+}

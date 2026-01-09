@@ -88,6 +88,37 @@ pub async fn create_repository(
 }
 
 #[tauri::command]
+pub async fn get_repository(db: State<'_, DbPool>, id: i64) -> Result<Repository, AppError> {
+    let conn = db.get().map_err(|e| AppError::Internal(e.to_string()))?;
+
+    let mut stmt = conn.prepare(
+        "SELECT id, mcp_server_name, platform, base_url, name, url, owner, repo_name,
+                local_path, last_synced_at, created_at, updated_at
+         FROM repositories WHERE id = ?1",
+    )?;
+
+    let repo = stmt.query_row([id], |row| {
+        let platform_str: String = row.get(2)?;
+        Ok(Repository {
+            id: row.get(0)?,
+            mcp_server_name: row.get(1)?,
+            platform: platform_str.parse().unwrap_or(Platform::GitHub),
+            base_url: row.get(3)?,
+            name: row.get(4)?,
+            url: row.get(5)?,
+            owner: row.get(6)?,
+            repo_name: row.get(7)?,
+            local_path: row.get(8)?,
+            last_synced_at: row.get(9)?,
+            created_at: row.get(10)?,
+            updated_at: row.get(11)?,
+        })
+    })?;
+
+    Ok(repo)
+}
+
+#[tauri::command]
 pub async fn delete_repository(db: State<'_, DbPool>, id: i64) -> Result<(), AppError> {
     let conn = db.get().map_err(|e| AppError::Internal(e.to_string()))?;
 

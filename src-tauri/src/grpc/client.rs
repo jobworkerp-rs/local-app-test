@@ -198,6 +198,67 @@ impl JobworkerpClient {
         }
     }
 
+    /// Call an MCP server tool and return the result as JSON
+    ///
+    /// This method enqueues a job to call an MCP tool and waits for the result.
+    /// The `using` field specifies which tool to call on the MCP server.
+    pub async fn call_mcp_tool(
+        &self,
+        server_name: &str,
+        tool_name: &str,
+        args: &serde_json::Value,
+    ) -> Result<serde_json::Value, AppError> {
+        let mut client = self.job_client();
+
+        let request = JobRequest {
+            worker: Some(super::service::job_request::Worker::WorkerName(
+                server_name.to_string(),
+            )),
+            args: serde_json::to_vec(args)?,
+            using: Some(tool_name.to_string()),
+            ..Default::default()
+        };
+
+        let req = self.add_auth_header(tonic::Request::new(request));
+        let response = client.enqueue_for_stream(req).await?;
+        let mut stream = response.into_inner();
+
+        // Collect stream data
+        let mut result_bytes = Vec::new();
+        while let Some(item) = stream.message().await? {
+            match item.item {
+                Some(data::result_output_item::Item::Data(data)) => {
+                    result_bytes.extend(data);
+                }
+                Some(data::result_output_item::Item::FinalCollected(data)) => {
+                    // Prefer final collected result if available
+                    result_bytes = data;
+                }
+                Some(data::result_output_item::Item::End(_)) => {
+                    // Stream ended
+                    break;
+                }
+                None => {}
+            }
+        }
+
+        // Parse result as JSON
+        // MCP results are typically JSON with "content" array containing text results
+        if result_bytes.is_empty() {
+            return Ok(serde_json::json!(null));
+        }
+
+        let result: serde_json::Value = serde_json::from_slice(&result_bytes).map_err(|e| {
+            AppError::Internal(format!(
+                "Failed to parse MCP result as JSON: {}. Raw: {}",
+                e,
+                String::from_utf8_lossy(&result_bytes)
+            ))
+        })?;
+
+        Ok(result)
+    }
+
     /// List MCP server runners
     pub async fn list_mcp_servers(&self) -> Result<Vec<McpServerInfo>, AppError> {
         let mut client = self.runner_client();

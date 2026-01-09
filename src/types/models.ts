@@ -116,6 +116,37 @@ export function buildPrUrl(repository: Repository, prNumber: number): string {
 }
 
 /**
+ * Issue from GitHub/Gitea
+ */
+export interface Issue {
+  number: number;
+  title: string;
+  body: string | null;
+  state: string;
+  labels: string[];
+  user: string;
+  html_url: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Pull Request from GitHub/Gitea
+ */
+export interface PullRequest {
+  number: number;
+  title: string;
+  body: string | null;
+  state: string;
+  head_branch: string;
+  base_branch: string;
+  html_url: string;
+  merged: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
  * Build the web-facing base URL from a Gitea API base URL.
  */
 export function getGiteaWebBaseUrl(baseUrl: string): string {
