@@ -21,9 +21,7 @@ pub fn list_repositories(state: State<'_, Arc<AppState>>) -> Result<Vec<Reposito
                     Ok(Repository {
                         id: row.get(0)?,
                         mcp_server_name: row.get(1)?,
-                        platform: platform_str
-                            .parse()
-                            .unwrap_or(Platform::GitHub),
+                        platform: platform_str.parse().unwrap_or(Platform::GitHub),
                         base_url: row.get(3)?,
                         name: row.get(4)?,
                         url: row.get(5)?,

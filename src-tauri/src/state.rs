@@ -35,9 +35,9 @@ impl AppState {
 
     pub async fn get_grpc_client(&self) -> AppResult<JobworkerpClient> {
         let guard = self.grpc.read().await;
-        guard.clone().ok_or_else(|| {
-            crate::error::AppError::Grpc("gRPC client not connected".to_string())
-        })
+        guard
+            .clone()
+            .ok_or_else(|| crate::error::AppError::Grpc("gRPC client not connected".to_string()))
     }
 
     pub async fn update_grpc_url(&self, url: &str) -> AppResult<()> {

@@ -2,7 +2,6 @@ use std::sync::Arc;
 use tauri::State;
 
 use crate::db::AppSettings;
-use crate::error::AppResult;
 use crate::state::AppState;
 
 #[derive(serde::Deserialize)]

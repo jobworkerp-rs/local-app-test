@@ -1,10 +1,8 @@
 use tonic::transport::Channel;
 
 use super::service::{
-    job_result_service_client::JobResultServiceClient,
-    job_service_client::JobServiceClient,
-    runner_service_client::RunnerServiceClient,
-    worker_service_client::WorkerServiceClient,
+    job_result_service_client::JobResultServiceClient, job_service_client::JobServiceClient,
+    runner_service_client::RunnerServiceClient, worker_service_client::WorkerServiceClient,
 };
 use crate::error::{AppError, AppResult};
 

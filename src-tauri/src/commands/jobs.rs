@@ -33,8 +33,7 @@ pub fn list_jobs(
             sql.push_str(" ORDER BY created_at DESC");
 
             let mut stmt = conn.prepare(&sql)?;
-            let params_ref: Vec<&dyn rusqlite::ToSql> =
-                params.iter().map(|p| p.as_ref()).collect();
+            let params_ref: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
 
             let jobs = stmt
                 .query_map(params_ref.as_slice(), |row| {
@@ -44,9 +43,7 @@ pub fn list_jobs(
                         repository_id: row.get(1)?,
                         issue_number: row.get(2)?,
                         jobworkerp_job_id: row.get(3)?,
-                        status: status_str
-                            .parse()
-                            .unwrap_or(AgentJobStatus::Pending),
+                        status: status_str.parse().unwrap_or(AgentJobStatus::Pending),
                         worktree_path: row.get(5)?,
                         branch_name: row.get(6)?,
                         pr_number: row.get(7)?,
@@ -80,9 +77,7 @@ pub fn get_job(state: State<'_, Arc<AppState>>, id: i64) -> Result<AgentJob, Str
                     repository_id: row.get(1)?,
                     issue_number: row.get(2)?,
                     jobworkerp_job_id: row.get(3)?,
-                    status: status_str
-                        .parse()
-                        .unwrap_or(AgentJobStatus::Pending),
+                    status: status_str.parse().unwrap_or(AgentJobStatus::Pending),
                     worktree_path: row.get(5)?,
                     branch_name: row.get(6)?,
                     pr_number: row.get(7)?,

@@ -51,23 +51,24 @@ fn initialize_app() -> Result<Arc<AppState>, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Initialize tracing
-    tracing_subscriber::fmt::init();
+    // Initialize tracing (ignore if already initialized to avoid panic on double initialization)
+    if let Err(e) = tracing_subscriber::fmt::try_init() {
+        eprintln!("Tracing already initialized or failed: {}", e);
+    }
 
     let app_state = match initialize_app() {
         Ok(state) => state,
         Err(e) => {
             error!("Application initialization failed: {}", e);
-            // Show error dialog using native message box
-            #[cfg(not(target_os = "android"))]
+            // Desktop platforms: exit gracefully with error message
+            #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
             {
                 use std::process::exit;
                 eprintln!("Error: {}", e);
-                // On desktop, we can use rfd or native-dialog for better UX
-                // For now, just log and exit gracefully
                 exit(1);
             }
-            #[cfg(target_os = "android")]
+            // Mobile platforms: panic to trigger crash reporting
+            #[cfg(any(target_os = "android", target_os = "ios"))]
             {
                 panic!("Application initialization failed: {}", e);
             }

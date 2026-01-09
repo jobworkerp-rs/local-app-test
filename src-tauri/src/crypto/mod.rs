@@ -20,8 +20,8 @@ pub struct TokenCrypto {
 impl TokenCrypto {
     pub fn new() -> AppResult<Self> {
         let key = Self::get_or_create_key()?;
-        let cipher = Aes256Gcm::new_from_slice(&key)
-            .map_err(|e| AppError::Crypto(e.to_string()))?;
+        let cipher =
+            Aes256Gcm::new_from_slice(&key).map_err(|e| AppError::Crypto(e.to_string()))?;
         Ok(Self { cipher })
     }
 
@@ -101,8 +101,15 @@ impl TokenCrypto {
 mod tests {
     use super::*;
 
+    fn setup_mock_keyring() {
+        // Use mock credential builder for testing to avoid depending on OS keychain
+        keyring::set_default_credential_builder(keyring::mock::default_credential_builder());
+    }
+
     #[test]
     fn test_encrypt_decrypt() {
+        setup_mock_keyring();
+
         let crypto = TokenCrypto::new().unwrap();
         let plaintext = "test-token-12345";
 
@@ -113,16 +120,31 @@ mod tests {
     }
 
     #[test]
-    fn test_key_persistence() {
-        // First instance creates key
-        let crypto1 = TokenCrypto::new().unwrap();
-        let plaintext = "persistent-token";
-        let encrypted = crypto1.encrypt(plaintext).unwrap();
+    fn test_encrypt_decrypt_multiple_values() {
+        setup_mock_keyring();
 
-        // Second instance should use same key
-        let crypto2 = TokenCrypto::new().unwrap();
-        let decrypted = crypto2.decrypt(&encrypted).unwrap();
+        let crypto = TokenCrypto::new().unwrap();
+        let tokens = ["token-1", "token-2", "longer-token-with-special-chars!@#$%"];
 
-        assert_eq!(plaintext, decrypted);
+        for token in tokens {
+            let encrypted = crypto.encrypt(token).unwrap();
+            let decrypted = crypto.decrypt(&encrypted).unwrap();
+            assert_eq!(token, decrypted);
+        }
+    }
+
+    #[test]
+    fn test_decrypt_invalid_data() {
+        setup_mock_keyring();
+
+        let crypto = TokenCrypto::new().unwrap();
+
+        // Data too short (less than NONCE_SIZE)
+        let short_data = vec![0u8; 5];
+        assert!(crypto.decrypt(&short_data).is_err());
+
+        // Invalid ciphertext (correct length but wrong content)
+        let invalid_data = vec![0u8; 50];
+        assert!(crypto.decrypt(&invalid_data).is_err());
     }
 }
