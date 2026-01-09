@@ -15,7 +15,7 @@ pub struct AppState {
 impl AppState {
     /// Create new application state
     pub fn new(db: DbPool, grpc_url: Option<&str>) -> Result<Self, AppError> {
-        let crypto = TokenCrypto::new().map_err(|e| AppError::CryptoError(e.to_string()))?;
+        let crypto = TokenCrypto::new().map_err(|e| AppError::Crypto(e.to_string()))?;
 
         let default_url = default_grpc_url();
         let url = grpc_url.unwrap_or(&default_url);

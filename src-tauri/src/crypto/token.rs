@@ -78,6 +78,42 @@ impl TokenCrypto {
         Self::get_or_generate_key_from_file()
     }
 
+    /// Set restrictive file permissions on Windows using ACL
+    #[cfg(windows)]
+    fn set_windows_file_permissions(path: &std::path::Path) -> Result<(), CryptoError> {
+        use std::process::Command;
+
+        // Use icacls to restrict file access to current user only
+        // First, disable inheritance and remove all existing permissions
+        let output = Command::new("icacls")
+            .args([
+                path.to_str().unwrap_or_default(),
+                "/inheritance:r",
+                "/grant:r",
+                &format!("{}:F", std::env::var("USERNAME").unwrap_or_else(|_| "SYSTEM".to_string())),
+            ])
+            .output();
+
+        match output {
+            Ok(result) if result.status.success() => {
+                tracing::debug!("Set Windows ACL permissions on key file");
+                Ok(())
+            }
+            Ok(result) => {
+                tracing::warn!(
+                    "Failed to set Windows ACL: {}",
+                    String::from_utf8_lossy(&result.stderr)
+                );
+                // Don't fail - the file is still created, just with default permissions
+                Ok(())
+            }
+            Err(e) => {
+                tracing::warn!("Failed to execute icacls: {}", e);
+                Ok(())
+            }
+        }
+    }
+
     /// Fallback: store encryption key in application data directory
     fn get_or_generate_key_from_file() -> Result<[u8; KEY_SIZE], CryptoError> {
         let key_path = directories::ProjectDirs::from("com", "local-code-agent", "LocalCodeAgent")
@@ -105,12 +141,17 @@ impl TokenCrypto {
             let key_hex = hex::encode(key);
             std::fs::write(&key_path, &key_hex).map_err(|_| CryptoError::EncryptionFailed)?;
 
-            // Set restrictive permissions (Unix only)
+            // Set restrictive permissions
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
                 std::fs::set_permissions(&key_path, std::fs::Permissions::from_mode(0o600))
                     .map_err(|_| CryptoError::EncryptionFailed)?;
+            }
+
+            #[cfg(windows)]
+            {
+                Self::set_windows_file_permissions(&key_path)?;
             }
 
             tracing::info!("Stored new encryption key in file: {:?}", key_path);
@@ -153,11 +194,6 @@ impl TokenCrypto {
     }
 }
 
-impl Default for TokenCrypto {
-    fn default() -> Self {
-        Self::new().expect("Failed to initialize TokenCrypto")
-    }
-}
 
 #[cfg(test)]
 mod tests {

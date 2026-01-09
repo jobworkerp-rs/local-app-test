@@ -1,6 +1,5 @@
 use r2d2::{Pool, PooledConnection};
 use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::Connection;
 use std::path::Path;
 
 use crate::error::AppError;
@@ -33,19 +32,19 @@ pub fn create_pool(db_path: &Path) -> Result<DbPool, AppError> {
     let pool = Pool::builder()
         .max_size(5)
         .build(manager)
-        .map_err(|e| AppError::DbError(e.to_string()))?;
+        .map_err(|e| AppError::Internal(e.to_string()))?;
 
     Ok(pool)
 }
 
 /// Run database migrations
 pub fn run_migrations(pool: &DbPool) -> Result<(), AppError> {
-    let mut conn = pool.get().map_err(|e| AppError::DbError(e.to_string()))?;
+    let mut conn = pool.get().map_err(|e| AppError::Internal(e.to_string()))?;
 
     // Run embedded migrations
     embedded::migrations::runner()
         .run(&mut *conn)
-        .map_err(|e| AppError::DbError(format!("Migration error: {}", e)))?;
+        .map_err(|e| AppError::Internal(format!("Migration error: {}", e)))?;
 
     tracing::info!("Database migrations completed successfully");
     Ok(())
@@ -55,7 +54,7 @@ pub fn run_migrations(pool: &DbPool) -> Result<(), AppError> {
 pub fn default_db_path() -> Result<std::path::PathBuf, AppError> {
     let project_dirs =
         directories::ProjectDirs::from("com", "local-code-agent", "LocalCodeAgent")
-            .ok_or_else(|| AppError::ConfigError("Cannot determine data directory".into()))?;
+            .ok_or_else(|| AppError::Config("Cannot determine data directory".into()))?;
 
     let data_dir = project_dirs.data_local_dir();
     Ok(data_dir.join("local-code-agent.db"))

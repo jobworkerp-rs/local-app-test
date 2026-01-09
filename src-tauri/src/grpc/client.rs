@@ -22,7 +22,7 @@ impl JobworkerpClient {
     /// Create a new client with lazy connection
     pub fn new(url: &str) -> Result<Self, AppError> {
         let channel = Channel::from_shared(url.to_string())
-            .map_err(|e| AppError::ConfigError(e.to_string()))?
+            .map_err(|e| AppError::Config(e.to_string()))?
             .connect_lazy();
 
         let auth_token = std::env::var("JOBWORKERP_AUTH_TOKEN").ok();
@@ -58,8 +58,13 @@ impl JobworkerpClient {
     /// Add auth header to request if token is configured
     fn add_auth_header<T>(&self, mut request: tonic::Request<T>) -> tonic::Request<T> {
         if let Some(token) = &self.auth_token {
-            if let Ok(value) = token.parse() {
-                request.metadata_mut().insert("jobworkerp-auth", value);
+            match token.parse() {
+                Ok(value) => {
+                    request.metadata_mut().insert("jobworkerp-auth", value);
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to parse auth token as metadata value: {}", e);
+                }
             }
         }
         request
@@ -103,7 +108,7 @@ impl JobworkerpClient {
         let job_id = response
             .into_inner()
             .id
-            .ok_or_else(|| AppError::GrpcError("No job ID returned".into()))?;
+            .ok_or_else(|| AppError::Grpc("No job ID returned".into()))?;
 
         Ok(job_id.value.to_string())
     }
@@ -128,8 +133,10 @@ impl JobworkerpClient {
         let response = client.enqueue_for_stream(req).await?;
         let stream = response.into_inner();
 
-        // Job ID is returned in the stream metadata or first message
-        // For now, we generate a placeholder - actual implementation would parse from stream
+        // TODO: Extract job_id from the first stream message.
+        // The gRPC streaming API returns job_id in the initial ResultOutputItem.
+        // For now, return a placeholder. Callers should handle this appropriately
+        // or use enqueue() followed by listen_stream() for cases requiring job_id.
         let job_id = "pending".to_string();
 
         Ok((job_id, stream))

@@ -41,6 +41,11 @@ pub fn run() {
             commands::update_app_settings,
             commands::mcp_list_servers,
             commands::mcp_check_connection,
+            commands::list_jobs,
+            commands::get_job,
+            commands::list_repositories,
+            commands::create_repository,
+            commands::delete_repository,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

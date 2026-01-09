@@ -28,7 +28,7 @@ pub struct UpdateSettingsRequest {
 /// Get application settings
 #[tauri::command]
 pub async fn get_app_settings(db: State<'_, DbPool>) -> Result<AppSettings, AppError> {
-    let conn = db.get().map_err(|e| AppError::DbError(e.to_string()))?;
+    let conn = db.get().map_err(|e| AppError::Internal(e.to_string()))?;
 
     let settings = conn.query_row(
         "SELECT id, worktree_base_path, default_base_branch, agent_timeout_minutes,
@@ -72,7 +72,7 @@ fn fetch_settings(
             })
         },
     )
-    .map_err(|e| AppError::DbError(e.to_string()))
+    .map_err(|e| AppError::Internal(e.to_string()))
 }
 
 /// Update application settings
@@ -81,7 +81,7 @@ pub async fn update_app_settings(
     request: UpdateSettingsRequest,
     db: State<'_, DbPool>,
 ) -> Result<AppSettings, AppError> {
-    let conn = db.get().map_err(|e| AppError::DbError(e.to_string()))?;
+    let conn = db.get().map_err(|e| AppError::Internal(e.to_string()))?;
 
     // Check if any updates requested
     if request.worktree_base_path.is_none()

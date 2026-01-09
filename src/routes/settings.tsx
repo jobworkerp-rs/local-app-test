@@ -136,7 +136,7 @@ function SettingsPage() {
             onChange={(e) =>
               setFormData({
                 ...formData,
-                agent_timeout_minutes: parseInt(e.target.value, 10),
+                agent_timeout_minutes: e.target.valueAsNumber || 0,
               })
             }
             className="w-full p-2 border rounded"
@@ -157,7 +157,7 @@ function SettingsPage() {
             onChange={(e) =>
               setFormData({
                 ...formData,
-                sync_interval_minutes: parseInt(e.target.value, 10),
+                sync_interval_minutes: e.target.valueAsNumber || 0,
               })
             }
             className="w-full p-2 border rounded"
