@@ -43,7 +43,7 @@ function RepositoriesPage() {
   return (
     <div className="container mx-auto p-8">
       <div className="flex items-center gap-4 mb-6">
-        <Link to="/" className="text-blue-600 hover:underline">
+        <Link to="/" className="text-blue-600 dark:text-blue-400 hover:underline">
           &larr; Back
         </Link>
         <h1 className="text-3xl font-bold">Repositories</h1>
@@ -70,13 +70,13 @@ function RepositoriesPage() {
       )}
 
       {repositoriesQuery.isLoading ? (
-        <p>Loading repositories...</p>
+        <p className="text-slate-600 dark:text-slate-400">Loading repositories...</p>
       ) : repositoriesQuery.error ? (
-        <p className="text-red-600">
+        <p className="text-red-600 dark:text-red-400">
           Error: {String(repositoriesQuery.error)}
         </p>
       ) : repositoriesQuery.data?.length === 0 ? (
-        <p className="text-gray-500">
+        <p className="text-gray-500 dark:text-gray-400">
           No repositories registered. Click "Add Repository" to get started.
         </p>
       ) : (
@@ -103,26 +103,26 @@ interface RepositoryCardProps {
 
 function RepositoryCard({ repository, onDelete, isDeleting }: RepositoryCardProps) {
   return (
-    <div className="border rounded-lg p-4 hover:shadow-md transition-shadow">
+    <div className="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg p-4 hover:shadow-md transition-shadow">
       <div className="flex justify-between items-start">
         <Link
           to="/repositories/$repoId"
           params={{ repoId: String(repository.id) }}
           className="flex-1"
         >
-          <h3 className="text-lg font-semibold text-blue-600 hover:underline">
+          <h3 className="text-lg font-semibold text-blue-600 dark:text-blue-400 hover:underline">
             {repository.owner}/{repository.repo_name}
           </h3>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
             {repository.platform} &middot; MCP: {repository.mcp_server_name}
           </p>
           {repository.local_path && (
-            <p className="text-sm text-gray-400 mt-1">
+            <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
               Local: {repository.local_path}
             </p>
           )}
           {repository.last_synced_at && (
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
               Last synced: {new Date(repository.last_synced_at).toLocaleString()}
             </p>
           )}
@@ -132,7 +132,7 @@ function RepositoryCard({ repository, onDelete, isDeleting }: RepositoryCardProp
             href={repository.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="px-3 py-1 text-sm border rounded hover:bg-gray-50"
+            className="px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded hover:bg-gray-50 dark:hover:bg-slate-700"
             onClick={(e) => e.stopPropagation()}
           >
             Open
@@ -144,7 +144,7 @@ function RepositoryCard({ repository, onDelete, isDeleting }: RepositoryCardProp
               onDelete();
             }}
             disabled={isDeleting}
-            className="px-3 py-1 text-sm text-red-600 border border-red-600 rounded hover:bg-red-50 disabled:opacity-50"
+            className="px-3 py-1 text-sm text-red-600 dark:text-red-400 border border-red-600 dark:border-red-500 rounded hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-50"
           >
             Delete
           </button>
@@ -207,7 +207,7 @@ function RepositoryForm({ mcpServers, onSuccess }: RepositoryFormProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="border rounded-lg p-6 mb-6 bg-gray-50">
+    <form onSubmit={handleSubmit} className="border border-slate-200 dark:border-slate-700 rounded-lg p-6 mb-6 bg-gray-50 dark:bg-slate-800">
       <h2 className="text-xl font-semibold mb-4">Add Repository</h2>
 
       <div className="grid grid-cols-2 gap-4 mb-4">
@@ -219,7 +219,7 @@ function RepositoryForm({ mcpServers, onSuccess }: RepositoryFormProps) {
             id="mcp_server_name"
             value={formData.mcp_server_name}
             onChange={(e) => setFormData({ ...formData, mcp_server_name: e.target.value })}
-            className="w-full p-2 border rounded"
+            className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
             required
           >
             <option value="">Select MCP Server</option>
@@ -240,7 +240,7 @@ function RepositoryForm({ mcpServers, onSuccess }: RepositoryFormProps) {
             id="platform"
             value={formData.platform}
             onChange={(e) => handlePlatformChange(e.target.value as "GitHub" | "Gitea")}
-            className="w-full p-2 border rounded"
+            className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
           >
             <option value="GitHub">GitHub</option>
             <option value="Gitea">Gitea</option>
@@ -259,7 +259,7 @@ function RepositoryForm({ mcpServers, onSuccess }: RepositoryFormProps) {
             value={formData.base_url}
             onChange={(e) => setFormData({ ...formData, base_url: e.target.value })}
             placeholder="https://gitea.example.com/api/v1"
-            className="w-full p-2 border rounded"
+            className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
             required
           />
         </div>
@@ -276,7 +276,7 @@ function RepositoryForm({ mcpServers, onSuccess }: RepositoryFormProps) {
             value={formData.owner}
             onChange={(e) => handleOwnerRepoChange(e.target.value, formData.repo_name)}
             placeholder="owner"
-            className="w-full p-2 border rounded"
+            className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
             required
           />
         </div>
@@ -291,7 +291,7 @@ function RepositoryForm({ mcpServers, onSuccess }: RepositoryFormProps) {
             value={formData.repo_name}
             onChange={(e) => handleOwnerRepoChange(formData.owner, e.target.value)}
             placeholder="repo-name"
-            className="w-full p-2 border rounded"
+            className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
             required
           />
         </div>
@@ -309,12 +309,12 @@ function RepositoryForm({ mcpServers, onSuccess }: RepositoryFormProps) {
             setFormData({ ...formData, local_path: e.target.value || null })
           }
           placeholder="/path/to/local/clone"
-          className="w-full p-2 border rounded"
+          className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
         />
       </div>
 
       {formData.url && (
-        <p className="text-sm text-gray-500 mb-4">
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
           Repository URL: {formData.url}
         </p>
       )}
@@ -330,7 +330,7 @@ function RepositoryForm({ mcpServers, onSuccess }: RepositoryFormProps) {
       </div>
 
       {createMutation.isError && (
-        <p className="text-red-600 mt-2">
+        <p className="text-red-600 dark:text-red-400 mt-2">
           Error: {String(createMutation.error)}
         </p>
       )}
