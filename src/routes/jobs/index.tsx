@@ -1,7 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
-import { type AgentJobStatus, type AgentJob, type Repository } from "@/types/models";
+import {
+  type AgentJobStatus,
+  type AgentJob,
+  type Repository,
+  ACTIVE_JOB_STATUSES,
+} from "@/types/models";
 
 export const Route = createFileRoute("/jobs/")({
   component: JobsPage,
@@ -84,7 +89,7 @@ interface JobCardProps {
 
 function JobCard({ job, repository }: JobCardProps) {
   const status = statusConfig[job.status];
-  const isActive = ["Pending", "PreparingWorkspace", "FetchingIssue", "RunningAgent", "CreatingPR"].includes(job.status);
+  const isActive = ACTIVE_JOB_STATUSES.includes(job.status);
 
   return (
     <Link

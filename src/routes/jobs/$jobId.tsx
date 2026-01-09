@@ -1,7 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
-import { type AgentJobStatus, type AgentJob, type Repository } from "@/types/models";
+import {
+  type AgentJobStatus,
+  type AgentJob,
+  type Repository,
+  ACTIVE_JOB_STATUSES,
+  buildPrUrl,
+} from "@/types/models";
 
 export const Route = createFileRoute("/jobs/$jobId")({
   component: JobDetailPage,
@@ -40,7 +46,7 @@ function JobDetailPage() {
     refetchInterval: (query) => {
       const job = query.state.data;
       if (!job) return 5000;
-      const isActive = ["Pending", "PreparingWorkspace", "FetchingIssue", "RunningAgent", "CreatingPR"].includes(job.status);
+      const isActive = ACTIVE_JOB_STATUSES.includes(job.status);
       return isActive ? 2000 : false;
     },
   });
@@ -81,7 +87,7 @@ function JobDetailPage() {
     : null;
 
   const prUrl = repository && job.pr_number
-    ? `${repository.url}/pull/${job.pr_number}`
+    ? buildPrUrl(repository, job.pr_number)
     : null;
 
   return (
@@ -229,7 +235,7 @@ function JobDetailPage() {
                 </a>
               )}
 
-              {["Pending", "PreparingWorkspace", "FetchingIssue", "RunningAgent", "CreatingPR"].includes(job.status) && (
+              {ACTIVE_JOB_STATUSES.includes(job.status) && (
                 <button
                   type="button"
                   className="block w-full px-4 py-2 text-center border border-red-600 text-red-600 rounded hover:bg-red-50"

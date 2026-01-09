@@ -10,6 +10,17 @@ export type AgentJobStatus =
   | "Failed"
   | "Cancelled";
 
+/**
+ * Statuses that indicate a job is actively running and should be polled.
+ */
+export const ACTIVE_JOB_STATUSES: AgentJobStatus[] = [
+  "Pending",
+  "PreparingWorkspace",
+  "FetchingIssue",
+  "RunningAgent",
+  "CreatingPR",
+];
+
 export interface AgentJob {
   id: number;
   repository_id: number;
@@ -86,6 +97,22 @@ export function buildGiteaRepoUrl(baseUrl: string, owner: string, repoName: stri
     // Fallback: naive replacement if URL parsing fails
     return `${baseUrl.replace(/\/api\/v1\/?$/, "")}/${owner}/${repoName}`;
   }
+}
+
+/**
+ * Get the PR path segment for a given platform.
+ * GitHub uses /pull/{number}, Gitea uses /pulls/{number}
+ */
+export function getPrPath(platform: "GitHub" | "Gitea"): string {
+  return platform === "Gitea" ? "pulls" : "pull";
+}
+
+/**
+ * Build a PR URL for the given repository and PR number.
+ */
+export function buildPrUrl(repository: Repository, prNumber: number): string {
+  const prPath = getPrPath(repository.platform);
+  return `${repository.url}/${prPath}/${prNumber}`;
 }
 
 /**
