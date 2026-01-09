@@ -4,5 +4,6 @@ pub mod models;
 
 pub use connection::{init_database, DbConnection, DbPool};
 pub use models::{
-    AgentJob, AgentJobStatus, AppSettings, CreateAgentJob, CreateRepository, Platform, Repository,
+    AgentJob, AgentJobStatus, AppSettings, CreateAgentJob, CreateRepository, Issue, Platform,
+    PullRequest, Repository,
 };

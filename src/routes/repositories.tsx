@@ -105,16 +105,13 @@ function RepositoryCard({ repository, onDelete, isDeleting }: RepositoryCardProp
   return (
     <div className="border rounded-lg p-4 hover:shadow-md transition-shadow">
       <div className="flex justify-between items-start">
-        <div>
-          <h3 className="text-lg font-semibold">
-            <a
-              href={repository.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 hover:underline"
-            >
-              {repository.owner}/{repository.repo_name}
-            </a>
+        <Link
+          to="/repositories/$repoId"
+          params={{ repoId: String(repository.id) }}
+          className="flex-1"
+        >
+          <h3 className="text-lg font-semibold text-blue-600 hover:underline">
+            {repository.owner}/{repository.repo_name}
           </h3>
           <p className="text-sm text-gray-500">
             {repository.platform} &middot; MCP: {repository.mcp_server_name}
@@ -129,11 +126,23 @@ function RepositoryCard({ repository, onDelete, isDeleting }: RepositoryCardProp
               Last synced: {new Date(repository.last_synced_at).toLocaleString()}
             </p>
           )}
-        </div>
-        <div className="flex gap-2">
+        </Link>
+        <div className="flex gap-2 ml-4">
+          <a
+            href={repository.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-3 py-1 text-sm border rounded hover:bg-gray-50"
+            onClick={(e) => e.stopPropagation()}
+          >
+            Open
+          </a>
           <button
             type="button"
-            onClick={onDelete}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
             disabled={isDeleting}
             className="px-3 py-1 text-sm text-red-600 border border-red-600 rounded hover:bg-red-50 disabled:opacity-50"
           >
