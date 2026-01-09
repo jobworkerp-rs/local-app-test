@@ -46,7 +46,7 @@ function RepositoryPullsPage() {
   if (!isValidRepoId) {
     return (
       <div className="container mx-auto p-8">
-        <p className="text-red-600">Error: Invalid repository ID</p>
+        <p className="text-red-600 dark:text-red-400">Error: Invalid repository ID</p>
       </div>
     );
   }
@@ -54,7 +54,7 @@ function RepositoryPullsPage() {
   if (repositoryQuery.isLoading) {
     return (
       <div className="container mx-auto p-8">
-        <p>Loading repository...</p>
+        <p className="text-slate-600 dark:text-slate-400">Loading repository...</p>
       </div>
     );
   }
@@ -62,7 +62,7 @@ function RepositoryPullsPage() {
   if (repositoryQuery.error) {
     return (
       <div className="container mx-auto p-8">
-        <p className="text-red-600">Error: {String(repositoryQuery.error)}</p>
+        <p className="text-red-600 dark:text-red-400">Error: {String(repositoryQuery.error)}</p>
       </div>
     );
   }
@@ -75,7 +75,7 @@ function RepositoryPullsPage() {
         <Link
           to="/repositories/$repoId"
           params={{ repoId }}
-          className="text-blue-600 hover:underline"
+          className="text-blue-600 dark:text-blue-400 hover:underline"
         >
           &larr; Back to Repository
         </Link>
@@ -95,7 +95,7 @@ function RepositoryPullsPage() {
             className={`px-4 py-2 rounded ${
               stateFilter === state
                 ? "bg-green-600 text-white"
-                : "border hover:bg-gray-50"
+                : "border border-slate-300 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700"
             }`}
           >
             {state.charAt(0).toUpperCase() + state.slice(1)}
@@ -105,12 +105,12 @@ function RepositoryPullsPage() {
 
       {/* PRs List */}
       {pullsQuery.isLoading ? (
-        <p>Loading pull requests...</p>
+        <p className="text-slate-600 dark:text-slate-400">Loading pull requests...</p>
       ) : pullsQuery.error ? (
-        <p className="text-red-600">Error: {String(pullsQuery.error)}</p>
+        <p className="text-red-600 dark:text-red-400">Error: {String(pullsQuery.error)}</p>
       ) : pullsQuery.data?.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-gray-500">
+          <p className="text-gray-500 dark:text-gray-400">
             {stateFilter === "all"
               ? "No pull requests found."
               : `No ${stateFilter} pull requests found.`}
@@ -134,18 +134,18 @@ interface PullRequestCardProps {
 function PullRequestCard({ pr }: PullRequestCardProps) {
   const getStatusBadge = () => {
     if (pr.merged) {
-      return { text: "Merged", color: "text-indigo-700 bg-indigo-100" };
+      return { text: "Merged", color: "text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900" };
     }
     if (pr.state === "open") {
-      return { text: "Open", color: "text-green-700 bg-green-100" };
+      return { text: "Open", color: "text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900" };
     }
-    return { text: "Closed", color: "text-red-700 bg-red-100" };
+    return { text: "Closed", color: "text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900" };
   };
 
   const status = getStatusBadge();
 
   return (
-    <div className="border rounded-lg p-4 hover:shadow-md transition-shadow">
+    <div className="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg p-4 hover:shadow-md transition-shadow">
       <div className="flex justify-between items-start">
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-2">
@@ -154,7 +154,7 @@ function PullRequestCard({ pr }: PullRequestCardProps) {
             >
               {status.text}
             </span>
-            <span className="text-gray-500 text-sm">#{pr.number}</span>
+            <span className="text-gray-500 dark:text-gray-400 text-sm">#{pr.number}</span>
           </div>
 
           <h3 className="text-lg font-semibold">
@@ -162,14 +162,14 @@ function PullRequestCard({ pr }: PullRequestCardProps) {
               href={pr.html_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:text-blue-600"
+              className="hover:text-blue-600 dark:hover:text-blue-400"
             >
               {pr.title}
             </a>
           </h3>
 
           {(pr.head_branch || pr.base_branch) && (
-            <div className="flex gap-4 text-sm text-gray-500 mt-2">
+            <div className="flex gap-4 text-sm text-gray-500 dark:text-gray-400 mt-2">
               <span>
                 <span className="font-medium">{pr.head_branch ?? "?"}</span>
                 {" → "}
@@ -178,7 +178,7 @@ function PullRequestCard({ pr }: PullRequestCardProps) {
             </div>
           )}
 
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             Created on {formatDate(pr.created_at)}
           </p>
         </div>
@@ -188,7 +188,7 @@ function PullRequestCard({ pr }: PullRequestCardProps) {
             href={pr.html_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="px-3 py-1 text-sm border rounded hover:bg-gray-50"
+            className="px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded hover:bg-gray-50 dark:hover:bg-slate-700"
           >
             View
           </a>

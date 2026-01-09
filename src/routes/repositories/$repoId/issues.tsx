@@ -46,7 +46,7 @@ function RepositoryIssuesPage() {
   if (!isValidRepoId) {
     return (
       <div className="container mx-auto p-8">
-        <p className="text-red-600">Error: Invalid repository ID</p>
+        <p className="text-red-600 dark:text-red-400">Error: Invalid repository ID</p>
       </div>
     );
   }
@@ -54,7 +54,7 @@ function RepositoryIssuesPage() {
   if (repositoryQuery.isLoading) {
     return (
       <div className="container mx-auto p-8">
-        <p>Loading repository...</p>
+        <p className="text-slate-600 dark:text-slate-400">Loading repository...</p>
       </div>
     );
   }
@@ -62,7 +62,7 @@ function RepositoryIssuesPage() {
   if (repositoryQuery.error) {
     return (
       <div className="container mx-auto p-8">
-        <p className="text-red-600">Error: {String(repositoryQuery.error)}</p>
+        <p className="text-red-600 dark:text-red-400">Error: {String(repositoryQuery.error)}</p>
       </div>
     );
   }
@@ -75,7 +75,7 @@ function RepositoryIssuesPage() {
         <Link
           to="/repositories/$repoId"
           params={{ repoId }}
-          className="text-blue-600 hover:underline"
+          className="text-blue-600 dark:text-blue-400 hover:underline"
         >
           &larr; Back to Repository
         </Link>
@@ -95,7 +95,7 @@ function RepositoryIssuesPage() {
             className={`px-4 py-2 rounded ${
               stateFilter === state
                 ? "bg-blue-600 text-white"
-                : "border hover:bg-gray-50"
+                : "border border-slate-300 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700"
             }`}
           >
             {state.charAt(0).toUpperCase() + state.slice(1)}
@@ -105,12 +105,12 @@ function RepositoryIssuesPage() {
 
       {/* Issues List */}
       {issuesQuery.isLoading ? (
-        <p>Loading issues...</p>
+        <p className="text-slate-600 dark:text-slate-400">Loading issues...</p>
       ) : issuesQuery.error ? (
-        <p className="text-red-600">Error: {String(issuesQuery.error)}</p>
+        <p className="text-red-600 dark:text-red-400">Error: {String(issuesQuery.error)}</p>
       ) : issuesQuery.data?.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-gray-500">
+          <p className="text-gray-500 dark:text-gray-400">
             {stateFilter === "all"
               ? "No issues found."
               : `No ${stateFilter} issues found.`}
@@ -154,27 +154,27 @@ function IssueCard({ issue, repositoryId }: IssueCardProps) {
   const hasRelatedPrs = relatedPrsQuery.isSuccess && relatedPrs.length > 0;
 
   return (
-    <div className="border rounded-lg p-4 hover:shadow-md transition-shadow">
+    <div className="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg p-4 hover:shadow-md transition-shadow">
       <div className="flex justify-between items-start">
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-2">
             <span
               className={`px-2 py-1 rounded text-sm font-medium ${
                 issue.state === "open"
-                  ? "text-green-700 bg-green-100"
-                  : "text-purple-700 bg-purple-100"
+                  ? "text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900"
+                  : "text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900"
               }`}
             >
               {issue.state}
             </span>
-            <span className="text-gray-500 text-sm">#{issue.number}</span>
+            <span className="text-gray-500 dark:text-gray-400 text-sm">#{issue.number}</span>
             {hasOpenPr && (
-              <span className="px-2 py-1 rounded text-xs font-medium text-yellow-700 bg-yellow-100">
+              <span className="px-2 py-1 rounded text-xs font-medium text-yellow-700 dark:text-yellow-300 bg-yellow-100 dark:bg-yellow-900">
                 PR Open
               </span>
             )}
             {hasMergedPr && (
-              <span className="px-2 py-1 rounded text-xs font-medium text-indigo-700 bg-indigo-100">
+              <span className="px-2 py-1 rounded text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900">
                 PR Merged
               </span>
             )}
@@ -185,7 +185,7 @@ function IssueCard({ issue, repositoryId }: IssueCardProps) {
               href={issue.html_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:text-blue-600"
+              className="hover:text-blue-600 dark:hover:text-blue-400"
             >
               {issue.title}
             </a>
@@ -196,7 +196,7 @@ function IssueCard({ issue, repositoryId }: IssueCardProps) {
               {issue.labels.map((label) => (
                 <span
                   key={label}
-                  className="px-2 py-0.5 text-xs rounded bg-gray-200"
+                  className="px-2 py-0.5 text-xs rounded bg-gray-200 dark:bg-gray-700"
                 >
                   {label}
                 </span>
@@ -204,14 +204,14 @@ function IssueCard({ issue, repositoryId }: IssueCardProps) {
             </div>
           )}
 
-          <p className="text-sm text-gray-500 mt-2">
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
             Opened by {issue.user} on {formatDate(issue.created_at)}
           </p>
 
           {/* Related PRs */}
           {hasRelatedPrs && (
-            <div className="mt-3 pt-3 border-t">
-              <p className="text-sm text-gray-600 mb-1">Related PRs:</p>
+            <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Related PRs:</p>
               <div className="flex flex-wrap gap-2">
                 {relatedPrs.map((pr) => (
                   <a
@@ -221,10 +221,10 @@ function IssueCard({ issue, repositoryId }: IssueCardProps) {
                     rel="noopener noreferrer"
                     className={`text-sm px-2 py-1 rounded ${
                       pr.merged
-                        ? "bg-indigo-100 text-indigo-700"
+                        ? "bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300"
                         : pr.state === "open"
-                          ? "bg-green-100 text-green-700"
-                          : "bg-gray-100 text-gray-700"
+                          ? "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300"
+                          : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300"
                     }`}
                   >
                     #{pr.number} {pr.merged ? "(merged)" : `(${pr.state})`}
@@ -240,7 +240,7 @@ function IssueCard({ issue, repositoryId }: IssueCardProps) {
             href={issue.html_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="px-3 py-1 text-sm border rounded hover:bg-gray-50"
+            className="px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded hover:bg-gray-50 dark:hover:bg-slate-700"
           >
             View
           </a>
