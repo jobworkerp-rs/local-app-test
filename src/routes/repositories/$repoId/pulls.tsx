@@ -4,6 +4,16 @@ import { invoke } from "@tauri-apps/api/core";
 import { useState } from "react";
 import { type Repository, type PullRequest } from "@/types/models";
 
+/**
+ * Format a date string safely, returning fallback for invalid dates
+ */
+function formatDate(dateStr: string | null | undefined, fallback = "-"): string {
+  if (!dateStr) return fallback;
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return fallback;
+  return date.toLocaleDateString();
+}
+
 export const Route = createFileRoute("/repositories/$repoId/pulls")({
   component: RepositoryPullsPage,
 });
@@ -26,7 +36,7 @@ function RepositoryPullsPage() {
     queryKey: ["pulls", numericRepoId, stateFilter],
     queryFn: () =>
       invoke<PullRequest[]>("list_pulls", {
-        repositoryId: numericRepoId,
+        repository_id: numericRepoId,
         state: stateFilter,
       }),
     enabled: isValidRepoId && !!repositoryQuery.data,
@@ -138,16 +148,18 @@ function PullRequestCard({ pr }: PullRequestCardProps) {
             </a>
           </h3>
 
-          <div className="flex gap-4 text-sm text-gray-500 mt-2">
-            <span>
-              <span className="font-medium">{pr.head_branch}</span>
-              {" → "}
-              <span className="font-medium">{pr.base_branch}</span>
-            </span>
-          </div>
+          {(pr.head_branch || pr.base_branch) && (
+            <div className="flex gap-4 text-sm text-gray-500 mt-2">
+              <span>
+                <span className="font-medium">{pr.head_branch ?? "?"}</span>
+                {" → "}
+                <span className="font-medium">{pr.base_branch ?? "?"}</span>
+              </span>
+            </div>
+          )}
 
           <p className="text-sm text-gray-500 mt-1">
-            Created on {new Date(pr.created_at).toLocaleDateString()}
+            Created on {formatDate(pr.created_at)}
           </p>
         </div>
 

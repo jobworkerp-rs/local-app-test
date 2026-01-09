@@ -4,6 +4,16 @@ import { invoke } from "@tauri-apps/api/core";
 import { useState } from "react";
 import { type Repository, type Issue, type PullRequest } from "@/types/models";
 
+/**
+ * Format a date string safely, returning fallback for invalid dates
+ */
+function formatDate(dateStr: string | null | undefined, fallback = "-"): string {
+  if (!dateStr) return fallback;
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return fallback;
+  return date.toLocaleDateString();
+}
+
 export const Route = createFileRoute("/repositories/$repoId/issues")({
   component: RepositoryIssuesPage,
 });
@@ -26,7 +36,7 @@ function RepositoryIssuesPage() {
     queryKey: ["issues", numericRepoId, stateFilter],
     queryFn: () =>
       invoke<Issue[]>("list_issues", {
-        repositoryId: numericRepoId,
+        repository_id: numericRepoId,
         state: stateFilter,
       }),
     enabled: isValidRepoId && !!repositoryQuery.data,
@@ -111,8 +121,8 @@ function IssueCard({ issue, repositoryId }: IssueCardProps) {
     queryKey: ["related-prs", repositoryId, issue.number],
     queryFn: () =>
       invoke<PullRequest[]>("find_related_prs", {
-        repositoryId,
-        issueNumber: issue.number,
+        repository_id: repositoryId,
+        issue_number: issue.number,
       }),
     staleTime: 60000, // Cache for 1 minute
   });
@@ -173,8 +183,7 @@ function IssueCard({ issue, repositoryId }: IssueCardProps) {
           )}
 
           <p className="text-sm text-gray-500 mt-2">
-            Opened by {issue.user} on{" "}
-            {new Date(issue.created_at).toLocaleDateString()}
+            Opened by {issue.user} on {formatDate(issue.created_at)}
           </p>
 
           {/* Related PRs */}

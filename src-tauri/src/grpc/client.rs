@@ -249,10 +249,15 @@ impl JobworkerpClient {
         }
 
         let result: serde_json::Value = serde_json::from_slice(&result_bytes).map_err(|e| {
-            AppError::Internal(format!(
-                "Failed to parse MCP result as JSON: {}. Raw: {}",
+            tracing::trace!(
+                "Failed to parse MCP result as JSON: {}. Raw bytes: {:?}",
                 e,
                 String::from_utf8_lossy(&result_bytes)
+            );
+            AppError::Internal(format!(
+                "Failed to parse MCP result as JSON: {} (response size: {} bytes)",
+                e,
+                result_bytes.len()
             ))
         })?;
 

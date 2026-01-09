@@ -3,6 +3,26 @@ import { useQuery } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { type Repository, type Issue, type PullRequest } from "@/types/models";
 
+/**
+ * Format a date string safely, returning fallback for invalid dates
+ */
+function formatDate(dateStr: string | null | undefined, fallback = "-"): string {
+  if (!dateStr) return fallback;
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return fallback;
+  return date.toLocaleDateString();
+}
+
+/**
+ * Format a datetime string safely, returning fallback for invalid dates
+ */
+function formatDateTime(dateStr: string | null | undefined, fallback = "-"): string {
+  if (!dateStr) return fallback;
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return fallback;
+  return date.toLocaleString();
+}
+
 export const Route = createFileRoute("/repositories/$repoId")({
   component: RepositoryDetailPage,
 });
@@ -22,7 +42,7 @@ function RepositoryDetailPage() {
     queryKey: ["issues", numericRepoId, "open"],
     queryFn: () =>
       invoke<Issue[]>("list_issues", {
-        repositoryId: numericRepoId,
+        repository_id: numericRepoId,
         state: "open",
       }),
     enabled: isValidRepoId && !!repositoryQuery.data,
@@ -32,7 +52,7 @@ function RepositoryDetailPage() {
     queryKey: ["pulls", numericRepoId, "open"],
     queryFn: () =>
       invoke<PullRequest[]>("list_pulls", {
-        repositoryId: numericRepoId,
+        repository_id: numericRepoId,
         state: "open",
       }),
     enabled: isValidRepoId && !!repositoryQuery.data,
@@ -141,7 +161,7 @@ function RepositoryDetailPage() {
                 <div>
                   <dt className="text-sm text-gray-500">Last Synced</dt>
                   <dd className="font-medium">
-                    {new Date(repo.last_synced_at).toLocaleString()}
+                    {formatDateTime(repo.last_synced_at)}
                   </dd>
                 </div>
               )}
@@ -227,11 +247,11 @@ function RepositoryDetailPage() {
             <dl className="space-y-2 text-sm">
               <div>
                 <dt className="text-gray-500">Created</dt>
-                <dd>{new Date(repo.created_at).toLocaleDateString()}</dd>
+                <dd>{formatDate(repo.created_at)}</dd>
               </div>
               <div>
                 <dt className="text-gray-500">Updated</dt>
-                <dd>{new Date(repo.updated_at).toLocaleDateString()}</dd>
+                <dd>{formatDate(repo.updated_at)}</dd>
               </div>
             </dl>
           </div>

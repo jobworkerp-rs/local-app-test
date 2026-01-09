@@ -16,25 +16,55 @@ fn get_repo_by_id(db: &DbPool, id: i64) -> Result<Repository, AppError> {
          FROM repositories WHERE id = ?1",
     )?;
 
-    let repo = stmt.query_row([id], |row| {
-        let platform_str: String = row.get(2)?;
-        Ok(Repository {
-            id: row.get(0)?,
-            mcp_server_name: row.get(1)?,
-            platform: platform_str.parse().unwrap_or(Platform::GitHub),
-            base_url: row.get(3)?,
-            name: row.get(4)?,
-            url: row.get(5)?,
-            owner: row.get(6)?,
-            repo_name: row.get(7)?,
-            local_path: row.get(8)?,
-            last_synced_at: row.get(9)?,
-            created_at: row.get(10)?,
-            updated_at: row.get(11)?,
-        })
+    let row_data: (
+        i64,
+        String,
+        String,
+        String,
+        String,
+        String,
+        String,
+        String,
+        Option<String>,
+        Option<String>,
+        String,
+        String,
+    ) = stmt.query_row([id], |row| {
+        Ok((
+            row.get(0)?,
+            row.get(1)?,
+            row.get(2)?,
+            row.get(3)?,
+            row.get(4)?,
+            row.get(5)?,
+            row.get(6)?,
+            row.get(7)?,
+            row.get(8)?,
+            row.get(9)?,
+            row.get(10)?,
+            row.get(11)?,
+        ))
     })?;
 
-    Ok(repo)
+    let platform: Platform = row_data
+        .2
+        .parse()
+        .map_err(|_| AppError::InvalidInput(format!("Invalid platform value: {}", row_data.2)))?;
+
+    Ok(Repository {
+        id: row_data.0,
+        mcp_server_name: row_data.1,
+        platform,
+        base_url: row_data.3,
+        name: row_data.4,
+        url: row_data.5,
+        owner: row_data.6,
+        repo_name: row_data.7,
+        local_path: row_data.8,
+        last_synced_at: row_data.9,
+        created_at: row_data.10,
+        updated_at: row_data.11,
+    })
 }
 
 /// Get the MCP tool name for listing pull requests based on platform
@@ -47,7 +77,9 @@ fn get_list_pulls_tool(platform: Platform) -> &'static str {
 
 /// Parse pull request from MCP result JSON (handles both GitHub and Gitea formats)
 fn parse_pull_request(value: &serde_json::Value) -> Option<PullRequest> {
-    let number = value.get("number")?.as_i64()? as i32;
+    let number_i64 = value.get("number")?.as_i64()?;
+    let number: i32 = number_i64.try_into().ok()?;
+
     let title = value.get("title")?.as_str()?.to_string();
     let body = value.get("body").and_then(|v| v.as_str()).map(String::from);
     let state = value
@@ -60,17 +92,13 @@ fn parse_pull_request(value: &serde_json::Value) -> Option<PullRequest> {
     let head_branch = value
         .get("head")
         .and_then(|h| h.get("ref").and_then(|r| r.as_str()))
-        .or_else(|| value.get("head_branch").and_then(|v| v.as_str()))
-        .unwrap_or("")
-        .to_string();
+        .or_else(|| value.get("head_branch").and_then(|v| v.as_str()));
 
     // Base branch - GitHub: base.ref, Gitea: base_branch or base.ref
     let base_branch = value
         .get("base")
         .and_then(|b| b.get("ref").and_then(|r| r.as_str()))
-        .or_else(|| value.get("base_branch").and_then(|v| v.as_str()))
-        .unwrap_or("")
-        .to_string();
+        .or_else(|| value.get("base_branch").and_then(|v| v.as_str()));
 
     let html_url = value
         .get("html_url")
@@ -102,8 +130,8 @@ fn parse_pull_request(value: &serde_json::Value) -> Option<PullRequest> {
         title,
         body,
         state,
-        head_branch,
-        base_branch,
+        head_branch: head_branch.map(String::from),
+        base_branch: base_branch.map(String::from),
         html_url,
         merged,
         created_at,
@@ -165,16 +193,21 @@ fn is_related_pr(pr: &PullRequest, issue_number: i32) -> bool {
         }
     }
 
-    // Check branch name patterns
-    let issue_str = issue_number.to_string();
-    let branch = &pr.head_branch;
+    // Check branch name patterns only if head_branch is available
+    if let Some(ref branch) = pr.head_branch {
+        let issue_str = issue_number.to_string();
+        if branch.contains(&format!("issue-{}", issue_str))
+            || branch.contains(&format!("issue/{}", issue_str))
+            || branch.contains(&format!("fix-{}", issue_str))
+            || branch.contains(&format!("fix/{}", issue_str))
+            || branch.contains(&format!("feature/issue-{}", issue_str))
+            || branch.ends_with(&format!("/{}", issue_str))
+        {
+            return true;
+        }
+    }
 
-    branch.contains(&format!("issue-{}", issue_str))
-        || branch.contains(&format!("issue/{}", issue_str))
-        || branch.contains(&format!("fix-{}", issue_str))
-        || branch.contains(&format!("fix/{}", issue_str))
-        || branch.contains(&format!("feature/issue-{}", issue_str))
-        || branch.ends_with(&format!("/{}", issue_str))
+    false
 }
 
 /// List pull requests for a repository via MCP server

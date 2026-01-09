@@ -15,25 +15,55 @@ fn get_repo_by_id(db: &DbPool, id: i64) -> Result<Repository, AppError> {
          FROM repositories WHERE id = ?1",
     )?;
 
-    let repo = stmt.query_row([id], |row| {
-        let platform_str: String = row.get(2)?;
-        Ok(Repository {
-            id: row.get(0)?,
-            mcp_server_name: row.get(1)?,
-            platform: platform_str.parse().unwrap_or(Platform::GitHub),
-            base_url: row.get(3)?,
-            name: row.get(4)?,
-            url: row.get(5)?,
-            owner: row.get(6)?,
-            repo_name: row.get(7)?,
-            local_path: row.get(8)?,
-            last_synced_at: row.get(9)?,
-            created_at: row.get(10)?,
-            updated_at: row.get(11)?,
-        })
+    let row_data: (
+        i64,
+        String,
+        String,
+        String,
+        String,
+        String,
+        String,
+        String,
+        Option<String>,
+        Option<String>,
+        String,
+        String,
+    ) = stmt.query_row([id], |row| {
+        Ok((
+            row.get(0)?,
+            row.get(1)?,
+            row.get(2)?,
+            row.get(3)?,
+            row.get(4)?,
+            row.get(5)?,
+            row.get(6)?,
+            row.get(7)?,
+            row.get(8)?,
+            row.get(9)?,
+            row.get(10)?,
+            row.get(11)?,
+        ))
     })?;
 
-    Ok(repo)
+    let platform: Platform = row_data
+        .2
+        .parse()
+        .map_err(|_| AppError::InvalidInput(format!("Invalid platform value: {}", row_data.2)))?;
+
+    Ok(Repository {
+        id: row_data.0,
+        mcp_server_name: row_data.1,
+        platform,
+        base_url: row_data.3,
+        name: row_data.4,
+        url: row_data.5,
+        owner: row_data.6,
+        repo_name: row_data.7,
+        local_path: row_data.8,
+        last_synced_at: row_data.9,
+        created_at: row_data.10,
+        updated_at: row_data.11,
+    })
 }
 
 /// Get the MCP tool name for listing issues based on platform
@@ -54,7 +84,8 @@ fn get_read_issue_tool(platform: Platform) -> &'static str {
 
 /// Parse issue from MCP result JSON (handles both GitHub and Gitea formats)
 fn parse_issue(value: &serde_json::Value) -> Option<Issue> {
-    let number = value.get("number")?.as_i64()? as i32;
+    let number_i64 = value.get("number")?.as_i64()?;
+    let number: i32 = number_i64.try_into().ok()?;
     let title = value.get("title")?.as_str()?.to_string();
     let body = value.get("body").and_then(|v| v.as_str()).map(String::from);
     let state = value

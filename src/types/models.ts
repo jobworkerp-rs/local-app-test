@@ -138,8 +138,8 @@ export interface PullRequest {
   title: string;
   body: string | null;
   state: string;
-  head_branch: string;
-  base_branch: string;
+  head_branch: string | null;
+  base_branch: string | null;
   html_url: string;
   merged: boolean;
   created_at: string;
