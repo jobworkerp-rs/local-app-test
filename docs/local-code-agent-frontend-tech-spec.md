@@ -470,6 +470,8 @@ CREATE TABLE app_settings (
   default_base_branch TEXT NOT NULL DEFAULT 'main',
   agent_timeout_minutes INTEGER NOT NULL DEFAULT 30,
   sync_interval_minutes INTEGER NOT NULL DEFAULT 10,
+  grpc_server_url TEXT NOT NULL DEFAULT 'http://localhost:9000',  -- jobworkerp-rs接続先
+  locale TEXT NOT NULL DEFAULT 'en',  -- UI言語設定
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -585,6 +587,8 @@ export interface AppSettings {
   defaultBaseBranch: string;
   agentTimeoutMinutes: number;
   syncIntervalMinutes: number;
+  grpcServerUrl: string;       // jobworkerp-rs gRPC接続先URL
+  locale: string;              // UI言語設定（'en', 'ja'等）
   createdAt: string;
   updatedAt: string;
 }
@@ -871,7 +875,7 @@ tokio = { version = "1", features = ["full"] }
 tonic = "0.12"
 prost = "0.13"
 prost-types = "0.13"
-rusqlite = { version = "0.34", features = ["bundled"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
 r2d2 = "0.8"
 r2d2_sqlite = "0.25"
 aes-gcm = "0.10"
