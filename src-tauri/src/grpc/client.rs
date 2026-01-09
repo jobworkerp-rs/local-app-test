@@ -1,6 +1,7 @@
 use std::sync::Arc;
+use tokio::sync::OnceCell;
 use tonic::metadata::MetadataValue;
-use tonic::transport::Channel;
+use tonic::transport::{Channel, Endpoint};
 
 use crate::error::AppError;
 
@@ -13,18 +14,22 @@ use super::service::{
 };
 
 /// gRPC client for jobworkerp-rs
-#[derive(Clone)]
+///
+/// Uses lazy channel initialization to avoid requiring Tokio runtime at construction time.
 pub struct JobworkerpClient {
-    channel: Channel,
+    endpoint: Endpoint,
+    channel: OnceCell<Channel>,
     auth_metadata: Option<MetadataValue<tonic::metadata::Ascii>>,
 }
 
 impl JobworkerpClient {
-    /// Create a new client with lazy connection
+    /// Create a new client with deferred connection
+    ///
+    /// The actual gRPC channel is created lazily on first use to avoid
+    /// requiring a Tokio runtime at construction time.
     pub fn new(url: &str) -> Result<Self, AppError> {
-        let channel = Channel::from_shared(url.to_string())
-            .map_err(|e| AppError::Config(e.to_string()))?
-            .connect_lazy();
+        let endpoint = Endpoint::from_shared(url.to_string())
+            .map_err(|e| AppError::Config(e.to_string()))?;
 
         // Parse auth token at construction time to fail early on invalid tokens
         let auth_metadata = match std::env::var("JOBWORKERP_AUTH_TOKEN") {
@@ -38,7 +43,8 @@ impl JobworkerpClient {
         };
 
         Ok(Self {
-            channel,
+            endpoint,
+            channel: OnceCell::new(),
             auth_metadata,
         })
     }
@@ -48,24 +54,32 @@ impl JobworkerpClient {
         Ok(Arc::new(Self::new(url)?))
     }
 
+    /// Get or create the gRPC channel lazily
+    async fn get_channel(&self) -> Channel {
+        self.channel
+            .get_or_init(|| async { self.endpoint.connect_lazy() })
+            .await
+            .clone()
+    }
+
     /// Get a JobService client
-    fn job_client(&self) -> JobServiceClient<Channel> {
-        JobServiceClient::new(self.channel.clone())
+    async fn job_client(&self) -> JobServiceClient<Channel> {
+        JobServiceClient::new(self.get_channel().await)
     }
 
     /// Get a JobResultService client
-    fn result_client(&self) -> JobResultServiceClient<Channel> {
-        JobResultServiceClient::new(self.channel.clone())
+    async fn result_client(&self) -> JobResultServiceClient<Channel> {
+        JobResultServiceClient::new(self.get_channel().await)
     }
 
     /// Get a WorkerService client
-    fn worker_client(&self) -> WorkerServiceClient<Channel> {
-        WorkerServiceClient::new(self.channel.clone())
+    async fn worker_client(&self) -> WorkerServiceClient<Channel> {
+        WorkerServiceClient::new(self.get_channel().await)
     }
 
     /// Get a RunnerService client
-    fn runner_client(&self) -> RunnerServiceClient<Channel> {
-        RunnerServiceClient::new(self.channel.clone())
+    async fn runner_client(&self) -> RunnerServiceClient<Channel> {
+        RunnerServiceClient::new(self.get_channel().await)
     }
 
     /// Add auth header to request if token is configured
@@ -80,7 +94,7 @@ impl JobworkerpClient {
 
     /// Check connection to jobworkerp-rs
     pub async fn check_connection(&self) -> Result<bool, AppError> {
-        let mut client = self.worker_client();
+        let mut client = self.worker_client().await;
         let request = self.add_auth_header(tonic::Request::new(FindWorkerListRequest {
             limit: Some(1),
             ..Default::default()
@@ -96,7 +110,7 @@ impl JobworkerpClient {
         worker_name: &str,
         args: &serde_json::Value,
     ) -> Result<String, AppError> {
-        let mut client = self.job_client();
+        let mut client = self.job_client().await;
 
         let request = JobRequest {
             worker: Some(super::service::job_request::Worker::WorkerName(
@@ -126,7 +140,7 @@ impl JobworkerpClient {
         worker_name: &str,
         args: &serde_json::Value,
     ) -> Result<tonic::Streaming<data::ResultOutputItem>, AppError> {
-        let mut client = self.job_client();
+        let mut client = self.job_client().await;
 
         let request = JobRequest {
             worker: Some(super::service::job_request::Worker::WorkerName(
@@ -146,7 +160,7 @@ impl JobworkerpClient {
         &self,
         job_id: &str,
     ) -> Result<tonic::Streaming<data::ResultOutputItem>, AppError> {
-        let mut client = self.result_client();
+        let mut client = self.result_client().await;
 
         let request = ListenRequest {
             job_id: Some(data::JobId {
@@ -164,7 +178,7 @@ impl JobworkerpClient {
 
     /// Delete/cancel a job
     pub async fn delete_job(&self, job_id: &str) -> Result<(), AppError> {
-        let mut client = self.job_client();
+        let mut client = self.job_client().await;
 
         let request = data::JobId {
             value: job_id
@@ -179,7 +193,7 @@ impl JobworkerpClient {
 
     /// Find a worker by name
     pub async fn find_worker_by_name(&self, name: &str) -> Result<Option<data::Worker>, AppError> {
-        let mut client = self.worker_client();
+        let mut client = self.worker_client().await;
 
         let request = FindWorkerListRequest {
             name_filter: Some(name.to_string()),
@@ -208,7 +222,7 @@ impl JobworkerpClient {
         tool_name: &str,
         args: &serde_json::Value,
     ) -> Result<serde_json::Value, AppError> {
-        let mut client = self.job_client();
+        let mut client = self.job_client().await;
 
         let request = JobRequest {
             worker: Some(super::service::job_request::Worker::WorkerName(
@@ -266,7 +280,7 @@ impl JobworkerpClient {
 
     /// List MCP server runners
     pub async fn list_mcp_servers(&self) -> Result<Vec<McpServerInfo>, AppError> {
-        let mut client = self.runner_client();
+        let mut client = self.runner_client().await;
 
         let request = FindRunnerListRequest {
             runner_types: vec![data::RunnerType::McpServer as i32],
