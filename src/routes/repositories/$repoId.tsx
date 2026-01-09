@@ -35,7 +35,7 @@ function RepositoryDetailPage() {
   const repositoryQuery = useQuery({
     queryKey: ["repository", numericRepoId],
     queryFn: () =>
-      invoke<Repository>("get_repository", { repository_id: numericRepoId }),
+      invoke<Repository>("get_repository", { repositoryId: numericRepoId }),
     enabled: isValidRepoId,
   });
 
@@ -43,7 +43,7 @@ function RepositoryDetailPage() {
     queryKey: ["issues", numericRepoId, "open"],
     queryFn: () =>
       invoke<Issue[]>("list_issues", {
-        repository_id: numericRepoId,
+        repositoryId: numericRepoId,
         state: "open",
       }),
     enabled: isValidRepoId && !!repositoryQuery.data,
@@ -53,7 +53,7 @@ function RepositoryDetailPage() {
     queryKey: ["pulls", numericRepoId, "open"],
     queryFn: () =>
       invoke<PullRequest[]>("list_pulls", {
-        repository_id: numericRepoId,
+        repositoryId: numericRepoId,
         state: "open",
       }),
     enabled: isValidRepoId && !!repositoryQuery.data,
