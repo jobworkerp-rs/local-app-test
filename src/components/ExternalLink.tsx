@@ -32,12 +32,23 @@ export function ExternalLink({ href, children, className }: ExternalLinkProps) {
   const handleClick = (e: MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
     if (isAllowed) {
-      openUrl(href);
+      openUrl(href).catch((err) => {
+        console.error("Failed to open URL:", href, err);
+      });
     }
   };
 
   if (!isAllowed) {
-    return <span className={className}>{children}</span>;
+    return (
+      <span
+        className={`${className ?? ""} opacity-50 cursor-not-allowed`}
+        aria-disabled="true"
+        role="link"
+        tabIndex={-1}
+      >
+        {children}
+      </span>
+    );
   }
 
   return (
