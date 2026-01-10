@@ -99,6 +99,7 @@ export function useJobStream(
     setError(null);
 
     let unlisten: (() => void) | undefined;
+    let mounted = true;
 
     const handleEvent = (event: StreamEvent) => {
       switch (event.type) {
@@ -125,7 +126,12 @@ export function useJobStream(
 
     listenJobStream(jobId, handleEvent)
       .then((fn) => {
-        unlisten = fn;
+        if (!mounted) {
+          // Component unmounted before promise resolved - cleanup immediately
+          fn();
+        } else {
+          unlisten = fn;
+        }
       })
       .catch((err) => {
         setError(err instanceof Error ? err : new Error("Failed to listen"));
@@ -133,6 +139,7 @@ export function useJobStream(
       });
 
     return () => {
+      mounted = false;
       unlisten?.();
     };
   }, [jobId, enabled, maxChunks]);
@@ -163,7 +170,6 @@ export function useJobStreamText(
   const [text, setText] = useState("");
   const [status, setStatus] = useState<StreamStatus>("idle");
   const [error, setError] = useState<Error | null>(null);
-  const decoder = useMemo(() => new TextDecoder("utf-8"), []);
 
   const reset = useCallback(() => {
     setText("");
@@ -181,20 +187,38 @@ export function useJobStreamText(
     setError(null);
 
     let unlisten: (() => void) | undefined;
+    let mounted = true;
+    // Create a new decoder for each stream session to handle incomplete multibyte sequences
+    const streamDecoder = new TextDecoder("utf-8");
 
     const handleEvent = (event: StreamEvent) => {
       switch (event.type) {
         case "Data":
           setStatus("streaming");
-          setText((prev) => prev + decoder.decode(toUint8Array(event.data)));
+          // Use stream: true to buffer incomplete multibyte sequences across chunks
+          setText(
+            (prev) =>
+              prev +
+              streamDecoder.decode(toUint8Array(event.data), { stream: true })
+          );
           break;
 
         case "FinalCollected":
-          setText(decoder.decode(toUint8Array(event.data)));
+          // Final data replaces everything - flush decoder with stream: false
+          setText(
+            streamDecoder.decode(toUint8Array(event.data), { stream: false })
+          );
           setStatus("completed");
           break;
 
         case "End":
+          // Flush any remaining buffered bytes in the decoder
+          setText((prev) => {
+            const remaining = streamDecoder.decode(new Uint8Array(), {
+              stream: false,
+            });
+            return remaining ? prev + remaining : prev;
+          });
           setStatus("completed");
           break;
       }
@@ -202,7 +226,12 @@ export function useJobStreamText(
 
     listenJobStream(jobId, handleEvent)
       .then((fn) => {
-        unlisten = fn;
+        if (!mounted) {
+          // Component unmounted before promise resolved - cleanup immediately
+          fn();
+        } else {
+          unlisten = fn;
+        }
       })
       .catch((err) => {
         setError(err instanceof Error ? err : new Error("Failed to listen"));
@@ -210,9 +239,10 @@ export function useJobStreamText(
       });
 
     return () => {
+      mounted = false;
       unlisten?.();
     };
-  }, [jobId, enabled, decoder]);
+  }, [jobId, enabled]);
 
   return { text, status, error, reset };
 }

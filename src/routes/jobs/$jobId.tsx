@@ -1,13 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { invoke } from "@tauri-apps/api/core";
 import {
   type AgentJobStatus,
-  type AgentJob,
-  type Repository,
   ACTIVE_JOB_STATUSES,
   buildPrUrl,
 } from "@/types/models";
+import { jobQueries, repositoryQueries } from "@/lib/query";
 
 export const Route = createFileRoute("/jobs/$jobId")({
   component: JobDetailPage,
@@ -63,8 +61,7 @@ function JobDetailPage() {
   const isValidJobId = Number.isSafeInteger(numericJobId) && numericJobId > 0;
 
   const jobQuery = useQuery({
-    queryKey: ["agent-job", numericJobId],
-    queryFn: () => invoke<AgentJob>("get_job", { id: numericJobId }),
+    ...jobQueries.detail(numericJobId),
     enabled: isValidJobId,
     refetchInterval: (query) => {
       if (query.state.status === "error") return false;
@@ -75,10 +72,7 @@ function JobDetailPage() {
     },
   });
 
-  const repositoriesQuery = useQuery({
-    queryKey: ["repositories"],
-    queryFn: () => invoke<Repository[]>("list_repositories"),
-  });
+  const repositoriesQuery = useQuery(repositoryQueries.list());
 
   const job = jobQuery.data;
   const repository = repositoriesQuery.data?.find((r) => r.id === job?.repository_id);

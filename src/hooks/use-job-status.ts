@@ -121,6 +121,7 @@ export function useJobStatusSubscription(jobId: number | undefined) {
     if (!jobId || jobId <= 0) return;
 
     let unlisten: (() => void) | undefined;
+    let mounted = true;
 
     listenJobStatus(jobId, (newStatus) => {
       queryClient.setQueryData<AgentJob>(jobKeys.detail(jobId), (old) => {
@@ -130,13 +131,19 @@ export function useJobStatusSubscription(jobId: number | undefined) {
       queryClient.invalidateQueries({ queryKey: jobKeys.lists() });
     })
       .then((fn) => {
-        unlisten = fn;
+        if (!mounted) {
+          // Component unmounted before promise resolved - cleanup immediately
+          fn();
+        } else {
+          unlisten = fn;
+        }
       })
       .catch((err) => {
         console.error("Failed to subscribe to job status:", err);
       });
 
     return () => {
+      mounted = false;
       unlisten?.();
     };
   }, [jobId, queryClient]);

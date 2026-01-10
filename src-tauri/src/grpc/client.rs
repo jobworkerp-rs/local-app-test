@@ -344,7 +344,7 @@ impl JobworkerpClient {
                         AppError::Internal(format!("Failed to convert to JSON: {}", e))
                     })?;
 
-                tracing::info!(
+                tracing::debug!(
                     "call_mcp_tool result JSON: {}",
                     serde_json::to_string(&json_result).unwrap_or_else(|_| "?".to_string())
                 );

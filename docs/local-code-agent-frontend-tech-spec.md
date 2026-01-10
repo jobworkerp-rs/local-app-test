@@ -812,8 +812,11 @@ local-code-agent/
 └── README.md
 ```
 
-> **注記**: 現在の実装ではプラットフォーム専用ページ（/platforms）は未実装。
-> MCPサーバーの動的登録はリポジトリ登録フォーム内で直接行う設計としている。
+> **注記**:
+> - `/platforms`専用ページは廃止。MCPサーバーの動的登録は`/repositories`のリポジトリ登録フォーム内で実施
+> - `components/repositories/`、`components/issues/`、`components/jobs/`は共通コンポーネントが増えた場合に追加予定
+> - `lib/query/`は将来のリファクタリングで追加予定（現在は各ルートファイル内で直接TanStack Queryを使用）
+> - `stores/`は必要に応じて追加（現在はZustandストアは未使用）
 
 ### 5.1 Tauri固有ファイル
 
@@ -902,18 +905,18 @@ directories = "5"
 
 ### 6.1 ページ構成
 
-| パス | ルートファイル | 説明 |
-|------|---------------|------|
-| `/` | `routes/index.tsx` | 概要表示、最近のジョブ、クイックアクション |
-| `/platforms` | `routes/platforms/index.tsx` | プラットフォーム設定一覧 |
-| `/platforms/new` | `routes/platforms/new.tsx` | 新規プラットフォーム追加 |
-| `/repositories` | `routes/repositories/index.tsx` | リポジトリ一覧、統計 |
-| `/repositories/$id` | `routes/repositories/$id/index.tsx` | リポジトリ詳細、Issue/PR概要 |
-| `/repositories/$id/issues` | `routes/repositories/$id/issues.tsx` | Issue一覧、エージェント実行 |
-| `/repositories/$id/pulls` | `routes/repositories/$id/pulls.tsx` | PR一覧 |
-| `/jobs` | `routes/jobs/index.tsx` | 全ジョブ一覧 |
-| `/jobs/$id` | `routes/jobs/$id.tsx` | ジョブ詳細、ストリーミング表示 |
-| `/settings` | `routes/settings.tsx` | アプリ設定 |
+| パス | ルートファイル | 説明 | 実装状況 |
+|------|---------------|------|----------|
+| `/` | `routes/index.tsx` | 概要表示、最近のジョブ、クイックアクション | ✅ |
+| `/repositories` | `routes/repositories.tsx` | リポジトリ一覧、登録フォーム | ✅ |
+| `/repositories/$repoId` | `routes/repositories/$repoId.tsx` | リポジトリ詳細、Issue/PR概要 | ✅ |
+| `/repositories/$repoId/issues` | `routes/repositories/$repoId/issues.tsx` | Issue一覧、エージェント実行 | ✅ |
+| `/repositories/$repoId/pulls` | `routes/repositories/$repoId/pulls.tsx` | PR一覧 | ✅ |
+| `/jobs` | `routes/jobs/index.tsx` | 全ジョブ一覧 | ✅ |
+| `/jobs/$jobId` | `routes/jobs/$jobId.tsx` | ジョブ詳細、ストリーミング表示 | ✅（基本実装） |
+| `/settings` | `routes/settings.tsx` | アプリ設定 | ✅ |
+
+> **注記**: `/platforms`専用ページは廃止。MCPサーバーの動的登録は`/repositories`のリポジトリ登録フォーム内で行う設計。
 
 ### 6.2 TanStack Router ルート定義
 

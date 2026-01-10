@@ -1,8 +1,7 @@
 import { createFileRoute, Link, Outlet, useMatch } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { invoke } from "@tauri-apps/api/core";
-import { type Repository, type Issue, type PullRequest } from "@/types/models";
 import { ExternalLink } from "@/components/ExternalLink";
+import { repositoryQueries, issueQueries, pullQueries } from "@/lib/query";
 
 /**
  * Format a date string safely, returning fallback for invalid dates
@@ -59,29 +58,17 @@ function RepositoryDetailPage({ repoId }: RepositoryDetailPageProps) {
   const isValidRepoId = Number.isSafeInteger(numericRepoId) && numericRepoId > 0;
 
   const repositoryQuery = useQuery({
-    queryKey: ["repository", numericRepoId],
-    queryFn: () =>
-      invoke<Repository>("get_repository", { repositoryId: numericRepoId }),
+    ...repositoryQueries.detail(numericRepoId),
     enabled: isValidRepoId,
   });
 
   const issuesQuery = useQuery({
-    queryKey: ["issues", numericRepoId, "open"],
-    queryFn: () =>
-      invoke<Issue[]>("list_issues", {
-        repositoryId: numericRepoId,
-        state: "open",
-      }),
+    ...issueQueries.list(numericRepoId, "open"),
     enabled: isValidRepoId && !!repositoryQuery.data,
   });
 
   const pullsQuery = useQuery({
-    queryKey: ["pulls", numericRepoId, "open"],
-    queryFn: () =>
-      invoke<PullRequest[]>("list_pulls", {
-        repositoryId: numericRepoId,
-        state: "open",
-      }),
+    ...pullQueries.list(numericRepoId, "open"),
     enabled: isValidRepoId && !!repositoryQuery.data,
   });
 

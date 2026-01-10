@@ -1,12 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { invoke } from "@tauri-apps/api/core";
 import {
   type AgentJobStatus,
   type AgentJob,
   type Repository,
   ACTIVE_JOB_STATUSES,
 } from "@/types/models";
+import { jobQueries, repositoryQueries } from "@/lib/query";
 
 export const Route = createFileRoute("/jobs/")({
   component: JobsPage,
@@ -26,16 +26,8 @@ const statusConfig: Record<AgentJobStatus, { label: string; color: string; darkC
 };
 
 function JobsPage() {
-  const jobsQuery = useQuery({
-    queryKey: ["agent-jobs"],
-    queryFn: () => invoke<AgentJob[]>("list_jobs", { repository_id: null, status: null }),
-    refetchInterval: 5000,
-  });
-
-  const repositoriesQuery = useQuery({
-    queryKey: ["repositories"],
-    queryFn: () => invoke<Repository[]>("list_repositories"),
-  });
+  const jobsQuery = useQuery(jobQueries.list());
+  const repositoriesQuery = useQuery(repositoryQueries.list());
 
   const repoMap = new Map<number, Repository>();
   repositoriesQuery.data?.forEach((repo) => {

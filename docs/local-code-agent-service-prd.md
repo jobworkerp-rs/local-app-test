@@ -71,15 +71,18 @@ CreateRunnerRequest {
   name: "github-personal",        // ランナー名（ユニーク）
   description: "GitHub Personal", // 説明
   runner_type: MCP_SERVER,        // MCP_SERVER または PLUGIN
-  definition: """                 // TOML形式の設定文字列
+  definition: """                 // TOML形式の設定文字列（Docker実行形式）
+    [[server]]
     name = "github-personal"
     transport = "stdio"
-    command = "npx"
-    args = ["-y", "@modelcontextprotocol/server-github"]
+    command = "docker"
+    args = ["run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server"]
     envs = { GITHUB_PERSONAL_ACCESS_TOKEN = "ghp_xxxx" }
   """
 }
 ```
+
+> **注記**: Docker実行形式を推奨。環境依存性が少なく、Node.jsのインストールが不要。
 
 ---
 

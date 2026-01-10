@@ -1,9 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { invoke } from "@tauri-apps/api/core";
 import { useState } from "react";
-import { type Repository, type Issue, type PullRequest } from "@/types/models";
+import { type Issue } from "@/types/models";
 import { ExternalLink } from "@/components/ExternalLink";
+import { repositoryQueries, issueQueries, pullQueries } from "@/lib/query";
 
 /**
  * Format a date string safely, returning fallback for invalid dates
@@ -28,19 +28,12 @@ function RepositoryIssuesPage() {
   const [stateFilter, setStateFilter] = useState<IssueState>("open");
 
   const repositoryQuery = useQuery({
-    queryKey: ["repository", numericRepoId],
-    queryFn: () =>
-      invoke<Repository>("get_repository", { repositoryId: numericRepoId }),
+    ...repositoryQueries.detail(numericRepoId),
     enabled: isValidRepoId,
   });
 
   const issuesQuery = useQuery({
-    queryKey: ["issues", numericRepoId, stateFilter],
-    queryFn: () =>
-      invoke<Issue[]>("list_issues", {
-        repositoryId: numericRepoId,
-        state: stateFilter,
-      }),
+    ...issueQueries.list(numericRepoId, stateFilter),
     enabled: isValidRepoId && repositoryQuery.isSuccess,
   });
 
@@ -138,15 +131,7 @@ interface IssueCardProps {
 }
 
 function IssueCard({ issue, repositoryId }: IssueCardProps) {
-  const relatedPrsQuery = useQuery({
-    queryKey: ["related-prs", repositoryId, issue.number],
-    queryFn: () =>
-      invoke<PullRequest[]>("find_related_prs", {
-        repositoryId: repositoryId,
-        issueNumber: issue.number,
-      }),
-    staleTime: 60000, // Cache for 1 minute
-  });
+  const relatedPrsQuery = useQuery(pullQueries.related(repositoryId, issue.number));
 
   // Only use data when query succeeded to avoid misclassifying loading/error as "0 PRs"
   const relatedPrs = relatedPrsQuery.isSuccess ? relatedPrsQuery.data : [];

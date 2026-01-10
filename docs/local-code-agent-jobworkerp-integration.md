@@ -152,7 +152,16 @@ GitHub/Gitea MCPサーバーは**サーバー起動時にトークンを設定**
 
 **参考リンク**:
 - GitHub MCP Server: https://github.com/github/github-mcp-server
-- Gitea MCP Server: https://gitea.com/gitea/gitea-mcp
+- Gitea MCP Server: https://gitea.com/gitea/gitea-mcp (Docker image: `docker.gitea.com/gitea-mcp-server`)
+
+**HOST環境変数の違い**:
+
+| プラットフォーム | 環境変数 | 値の形式 | 例 |
+|-----------------|---------|---------|-----|
+| GitHub Enterprise | `GITHUB_HOST` | ホスト名のみ | `github.example.com` |
+| Gitea | `GITEA_HOST` | 完全なURL（スキーム含む） | `https://gitea.example.com` |
+
+> **注意**: GitHub MCPの`GITHUB_HOST`はホスト名のみを指定するのに対し、Gitea MCPの`GITEA_HOST`（または`GITEA_URL`）は`https://`を含む完全なURLを指定する。この違いを間違えるとAPI接続に失敗する。
 
 #### MCPサーバ設定フォーマット（静的設定モード）
 
@@ -736,7 +745,7 @@ output:
 
 **参考リンク**:
 - GitHub MCP Server: https://github.com/github/github-mcp-server
-- Gitea MCP Server: （実装依存）
+- Gitea MCP Server: https://gitea.com/gitea/gitea-mcp
 
 ---
 
