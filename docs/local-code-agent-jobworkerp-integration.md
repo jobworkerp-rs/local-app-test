@@ -547,39 +547,132 @@ input:
           type: string
           description: "ベースブランチ"
           default: "main"
-        worktree_base_path:
+        clone_url:
           type: string
-          description: "worktree作成先ベースパス"
-        local_repo_path:
+          description: "認証付きクローンURL（トークン埋め込み）"
+        base_clone_path:
           type: string
-          description: "ローカルリポジトリパス"
+          description: "ベースクローンディレクトリパス"
+        worktree_path:
+          type: string
+          description: "worktree作成先パス（タイムスタンプ付き）"
+        branch_name:
+          type: string
+          description: "作成するブランチ名"
         mcp_server:
           type: string
           description: "使用するMCPサーバ名 (github/gitea)"
+        custom_prompt:
+          type: string
+          description: "カスタムプロンプト（オプション）"
       required:
         - owner
         - repo
         - issue_number
         - issue_title
-        - worktree_base_path
-        - local_repo_path
+        - clone_url
+        - base_clone_path
+        - worktree_path
+        - branch_name
         - mcp_server
 ```
+
+#### 5.1.1 ディレクトリ構造
+
+ワークフロー入力のパス変数は以下のディレクトリ構造を前提とする：
+
+```
+worktree_base_path/                          # アプリ設定（デフォルト: ~/.local-code-agent/worktrees）
+├── {repo_identifier}/                       # リポジトリ識別子（local_path or owner/repo-name）
+│   ├── .git/                                # ベースクローン（自動作成）
+│   ├── issue-123-1704067200/                # worktree（タイムスタンプ付き）
+│   ├── issue-123-1704153600/                # 同一Issueの再実行
+│   └── issue-456-1704240000/
+```
+
+**変数の役割**:
+
+| 変数 | 設定箇所 | 値の例 | 役割 |
+|------|----------|--------|------|
+| `worktree_base_path` | AppSettings | `~/.local-code-agent/worktrees` | 全リポジトリ共通のベースパス |
+| `repo_identifier` | 自動計算 | `owner/repo-name` or `custom-name` | ベースクローン・worktreeのサブディレクトリ |
+| `base_clone_path` | 自動計算 | `{worktree_base_path}/{repo_identifier}` | gitクローン先 |
+| `worktree_path` | 自動計算 | `{base_clone_path}/issue-{N}-{timestamp}` | 作業ディレクトリ |
+| `branch_name` | 自動計算 | `issue-{N}` | 作成するブランチ名 |
+| `clone_url` | 自動計算 | `https://x-access-token:{token}@github.com/...` | 認証付きクローンURL |
+
+**リポジトリ識別子の決定**:
+- Repository.local_pathが設定されている場合: その値を使用
+- 未設定の場合: `{owner}/{repo_name}` を使用
+
+**タイムスタンプ**:
+- 同一Issueの再実行時にパス衝突を避けるため、UNIXタイムスタンプ（秒）を付与
+- 例: `issue-123-1704067200`
+
+#### 5.1.2 認証付きクローンURL
+
+プライベートリポジトリのクローンに対応するため、トークンを埋め込んだURLを使用する。
+
+**URL形式**:
+- GitHub: `https://x-access-token:{token}@github.com/{owner}/{repo}.git`
+- Gitea: `https://git:{token}@{host}/{owner}/{repo}.git`
+
+**トークンの取得**:
+Runner定義（`RunnerService.FindByName`で取得）の`data.definition`フィールドにMCPサーバー設定が含まれており、以下の優先順位でトークンを抽出する。
+
+**抽出優先順位**:
+1. `envs`フィールドから直接取得
+2. Docker実行の場合、`args`配列の`-e`オプションで指定された環境変数名を取得し、それに対応する`envs`の値を使用
+
+**設定パターン例**:
+
+パターン1: envsに直接設定（推奨）
+```toml
+[[server]]
+name = "github"
+command = "docker"
+args = ["run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server"]
+envs = { GITHUB_PERSONAL_ACCESS_TOKEN = "ghp_xxxx" }
+```
+
+パターン2: -eオプションで値も指定（KEY=VALUE形式）
+```toml
+[[server]]
+name = "github"
+command = "docker"
+args = ["run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN=ghp_xxxx", "ghcr.io/github/github-mcp-server"]
+```
+
+**抽出ロジック**:
+```
+1. envs から直接 GITHUB_PERSONAL_ACCESS_TOKEN / GITEA_ACCESS_TOKEN を取得
+2. 取得できない場合、args から "-e" の次の要素を確認
+   - "KEY=VALUE" 形式の場合: VALUE を使用
+   - "KEY" のみの場合: envs[KEY] を使用
+```
+
+**セキュリティ要件**:
+- `clone_url`は認証情報を含むため、ログ出力に含めてはならない
+- エラーメッセージにもURLを含めない
+- Debug実装でマスキングを行う
 
 ### 5.2 ワークフローステップ
 
 | ステップ | 使用Runner | 説明 |
 |---------|-----------|------|
-| 1. 既存ブランチ確認 | MCP_SERVER | ブランチ一覧取得、衝突確認 |
-| 2. ブランチ名・パス決定 | (set) | コンテキスト変数設定 |
-| 3. Worktree作成 | COMMAND | `git worktree add` |
-| 4. Issue情報取得 | MCP_SERVER | Issue本文・ラベル取得 |
-| 5. Issueコメント取得 | MCP_SERVER | 追加要件の取得 |
-| 6. プロンプト生成 | (set) | Liquidテンプレート展開 |
-| 7. エージェント実行 | COMMAND | `claude --print` |
-| 8. 変更プッシュ | COMMAND | `git push` |
-| 9. PR作成 | MCP_SERVER | `create_pull_request` |
-| 10. クリーンアップ | COMMAND | `git worktree remove` |
+| 1. ベースクローン存在確認 | COMMAND | `.git`ディレクトリの存在確認 |
+| 2. 必要に応じてクローン | COMMAND | `git clone` (clone_url使用) |
+| 3. ベースクローン更新 | COMMAND | `git fetch origin` |
+| 4. Worktree作成 | COMMAND | `git worktree add` (worktree_path, branch_name使用) |
+| 5. Issue情報取得 | MCP_SERVER | Issue本文・ラベル取得 |
+| 6. Issueコメント取得 | MCP_SERVER | 追加要件の取得 |
+| 7. プロンプト生成 | (set) | Liquidテンプレート展開 |
+| 8. エージェント実行 | COMMAND | `claude --print` |
+| 9. 変更プッシュ | COMMAND | `git push` |
+| 10. PR作成 | MCP_SERVER | `create_pull_request` |
+| 11. クリーンアップ | COMMAND | `git worktree remove` |
+
+> **注意**: ブランチ名・パスの決定はクライアント側（agent.rs）で行い、ワークフローには計算済みの値を渡す。
 
 ### 5.3 エージェントプロンプト安全性
 
@@ -807,7 +900,13 @@ output:
 
 | モデル | 説明 | 主要フィールド |
 |-------|------|---------------|
-| Repository | リポジトリ情報 | mcp_server_name, platform, owner, repo_name, local_path |
+| Repository | リポジトリ情報 | mcp_server_name, platform, owner, repo_name, local_path (optional) |
+
+**local_pathの役割**:
+- オプションフィールド
+- リポジトリ識別子のカスタマイズに使用
+- 未設定時は `owner/repo_name` がリポジトリ識別子として使用される
+- 特殊ケースで重複が発生した場合の回避用
 
 #### 動的設定モード
 
@@ -848,9 +947,11 @@ output:
 - macOS/Linux: `~/.claude/`
 - Windows: `%USERPROFILE%\.claude\`
 
-### 8.3 ローカルリポジトリ
+### 8.3 リポジトリクローン
 
-- エージェント実行対象のリポジトリがローカルにクローンされていること
+- ベースクローンはワークフロー実行時に自動作成される
+- 初回実行時に `worktree_base_path/{repo_identifier}` にクローンが作成される
+- 認証付きURL（トークン埋め込み）でプライベートリポジトリもクローン可能
 - git worktreeを作成可能な権限があること
 
 ### 8.4 ネットワーク要件
@@ -887,41 +988,85 @@ input:
         base_branch:
           type: string
           default: "main"
-        worktree_base_path:
+        clone_url:
           type: string
-        local_repo_path:
+          description: "認証付きクローンURL（トークン埋め込み）"
+        base_clone_path:
           type: string
+          description: "ベースクローンディレクトリパス"
+        worktree_path:
+          type: string
+          description: "worktree作成先パス（タイムスタンプ付き）"
+        branch_name:
+          type: string
+          description: "作成するブランチ名"
         mcp_server:
           type: string
+        custom_prompt:
+          type: string
+          description: "カスタムプロンプト（オプション）"
       required:
         - owner
         - repo
         - issue_number
         - issue_title
-        - worktree_base_path
-        - local_repo_path
+        - clone_url
+        - base_clone_path
+        - worktree_path
+        - branch_name
         - mcp_server
 
 do:
-  # 1. ブランチ名・パス決定
-  - determineBranchName:
-      set:
-        branch_name: "${\"issue-\" + (.issue_number | tostring)}"
-        worktree_path: "${.worktree_base_path + \"/issue-\" + (.issue_number | tostring)}"
-
-  # 2. メイン処理（エラーハンドリング付き）
+  # 1. メイン処理（エラーハンドリング付き）
   - mainProcessWithErrorHandling:
       try:
-        # 2.1 Worktree作成
+        # 1.1 ベースクローンの存在確認
+        - checkBaseClone:
+            run:
+              runner:
+                name: COMMAND
+                arguments:
+                  command: "test"
+                  args: "${[\"-d\", .base_clone_path + \"/.git\"]}"
+            export:
+              as:
+                base_clone_exists: true
+            catch:
+              as: error
+              do:
+                - setCloneNeeded:
+                    set:
+                      base_clone_exists: false
+
+        # 1.2 必要に応じてクローン
+        - cloneIfNeeded:
+            if: "${$base_clone_exists == false}"
+            run:
+              runner:
+                name: COMMAND
+                arguments:
+                  command: "git"
+                  args: "${[\"clone\", .clone_url, .base_clone_path]}"
+
+        # 1.3 ベースクローンを最新に更新
+        - fetchLatest:
+            run:
+              runner:
+                name: COMMAND
+                arguments:
+                  command: "git"
+                  args: "${[\"-C\", .base_clone_path, \"fetch\", \"origin\"]}"
+
+        # 1.4 Worktree作成
         - createWorktree:
             run:
               runner:
                 name: COMMAND
                 arguments:
                   command: "git"
-                  args: "${[\"-C\", .local_repo_path, \"worktree\", \"add\", $worktree_path, \"-b\", $branch_name]}"
+                  args: "${[\"-C\", .base_clone_path, \"worktree\", \"add\", .worktree_path, \"-b\", .branch_name, \"origin/\" + .base_branch]}"
 
-        # 2.2 Issue情報取得
+        # 1.5 Issue情報取得
         # Note: GitHub MCP v1.0.0+では issue_read を使用、method="get"でissue詳細取得
         - fetchIssue:
             run:
@@ -937,7 +1082,7 @@ do:
               as:
                 issue_body: "${.body}"
 
-        # 2.3 Issueコメント取得
+        # 1.6 Issueコメント取得
         # Note: GitHub MCP v1.0.0+では issue_read の method="get_comments" でコメント取得
         - fetchIssueComments:
             run:
@@ -953,7 +1098,7 @@ do:
               as:
                 issue_comments: "${.}"
 
-        # 2.4 プロンプト生成
+        # 1.7 プロンプト生成
         - generatePrompt:
             set:
               agent_prompt: |
@@ -970,43 +1115,48 @@ do:
 
                 {% endfor %}
 
+                {% if custom_prompt %}
+                ## 追加指示
+                {{ custom_prompt }}
+                {% endif %}
+
                 ## 指示
                 - 必要なファイルを作成・修正してください
                 - テストを実行して動作確認してください
                 - コミットメッセージは適切に記述してください
                 }
 
-        # 2.5 プロンプトファイル作成
+        # 1.8 プロンプトファイル作成
         - writePromptFile:
             run:
               runner:
                 name: COMMAND
                 arguments:
                   command: "sh"
-                  args: "${[\"-c\", \"cat > \" + $worktree_path + \"/.agent_prompt.txt << 'AGENT_PROMPT_EOF'\n\" + $agent_prompt + \"\nAGENT_PROMPT_EOF\"]}"
+                  args: "${[\"-c\", \"cat > \" + .worktree_path + \"/.agent_prompt.txt << 'AGENT_PROMPT_EOF'\n\" + $agent_prompt + \"\nAGENT_PROMPT_EOF\"]}"
 
-        # 2.6 エージェント実行
+        # 1.9 エージェント実行
         - runAgent:
             run:
               runner:
                 name: COMMAND
                 arguments:
                   command: "sh"
-                  args: "${[\"-c\", \"cd \" + $worktree_path + \" && claude --print < .agent_prompt.txt\"]}"
+                  args: "${[\"-c\", \"cd \" + .worktree_path + \" && claude --print < .agent_prompt.txt\"]}"
             timeout:
               after:
                 minutes: 10
 
-        # 2.7 変更プッシュ
+        # 1.10 変更プッシュ
         - pushChanges:
             run:
               runner:
                 name: COMMAND
                 arguments:
                   command: "git"
-                  args: "${[\"-C\", $worktree_path, \"push\", \"-u\", \"origin\", $branch_name]}"
+                  args: "${[\"-C\", .worktree_path, \"push\", \"-u\", \"origin\", .branch_name]}"
 
-        # 2.8 PR作成
+        # 1.11 PR作成
         - createPR:
             run:
               runner:
@@ -1024,21 +1174,21 @@ do:
                     ## Changes
                     Automatically generated by Local Code Agent Service.
                     }
-                  head: "${$branch_name}"
+                  head: "${.branch_name}"
                   base: "${.base_branch}"
             export:
               as:
                 pr_number: "${.number}"
                 pr_url: "${.html_url}"
 
-        # 2.9 クリーンアップ
+        # 1.12 クリーンアップ
         - cleanup:
             run:
               runner:
                 name: COMMAND
                 arguments:
                   command: "git"
-                  args: "${[\"-C\", .local_repo_path, \"worktree\", \"remove\", $worktree_path]}"
+                  args: "${[\"-C\", .base_clone_path, \"worktree\", \"remove\", .worktree_path]}"
 
       catch:
         as: error
@@ -1050,7 +1200,7 @@ do:
                   name: COMMAND
                   arguments:
                     command: "sh"
-                    args: "${[\"-c\", \"git -C \" + .local_repo_path + \" worktree remove --force \" + $worktree_path + \" 2>/dev/null || true\"]}"
+                    args: "${[\"-c\", \"git -C \" + .base_clone_path + \" worktree remove --force \" + .worktree_path + \" 2>/dev/null || true\"]}"
           - raiseError:
               raise:
                 error:

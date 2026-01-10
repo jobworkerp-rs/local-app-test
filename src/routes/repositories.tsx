@@ -170,7 +170,7 @@ function RepositoryCard({ repository, onDelete, isDeleting }: RepositoryCardProp
           </p>
           {repository.local_path && (
             <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
-              Local: {repository.local_path}
+              Identifier: {repository.local_path}
             </p>
           )}
           {repository.last_synced_at && (
@@ -500,7 +500,7 @@ function RepositoryForm({ mcpServers, onSuccess }: RepositoryFormProps) {
 
           <div className="mb-4">
             <label htmlFor="local_path" className="block text-sm font-medium mb-1">
-              Local Clone Path (optional)
+              Repository Identifier (optional)
             </label>
             <input
               id="local_path"
@@ -509,9 +509,12 @@ function RepositoryForm({ mcpServers, onSuccess }: RepositoryFormProps) {
               onChange={(e) =>
                 setFormData({ ...formData, local_path: e.target.value || null })
               }
-              placeholder="/path/to/local/clone"
+              placeholder={`Default: ${formData.owner}/${formData.repo_name}`}
               className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
             />
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Custom subdirectory name for worktrees. Leave empty to use owner/repo-name.
+            </p>
           </div>
 
           {formData.url && (

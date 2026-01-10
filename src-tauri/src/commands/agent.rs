@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -26,18 +27,39 @@ pub struct StartAgentResponse {
 }
 
 /// Workflow input parameters
-#[derive(Debug, Clone, Serialize)]
+/// Note: Debug is manually implemented to mask clone_url
+#[derive(Clone, Serialize)]
 struct WorkflowInput {
     owner: String,
     repo: String,
     issue_number: i32,
     issue_title: String,
     base_branch: String,
-    worktree_base_path: String,
-    local_repo_path: String,
+    clone_url: String,
+    base_clone_path: String,
+    worktree_path: String,
+    branch_name: String,
     mcp_server: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     custom_prompt: Option<String>,
+}
+
+impl std::fmt::Debug for WorkflowInput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WorkflowInput")
+            .field("owner", &self.owner)
+            .field("repo", &self.repo)
+            .field("issue_number", &self.issue_number)
+            .field("issue_title", &self.issue_title)
+            .field("base_branch", &self.base_branch)
+            .field("clone_url", &"[REDACTED]")
+            .field("base_clone_path", &self.base_clone_path)
+            .field("worktree_path", &self.worktree_path)
+            .field("branch_name", &self.branch_name)
+            .field("mcp_server", &self.mcp_server)
+            .field("custom_prompt", &self.custom_prompt)
+            .finish()
+    }
 }
 
 /// Workflow run arguments for jobworkerp-rs
@@ -83,19 +105,41 @@ pub async fn agent_start(
     // 1. Get repository info
     let repo = get_repository_internal(&db, request.repository_id)?;
 
-    // Validate local_path is set
-    let local_repo_path = repo
-        .local_path
-        .as_ref()
-        .ok_or_else(|| AppError::InvalidInput("Repository local_path is not configured".into()))?;
-
     // 2. Get app settings
     let settings = get_settings_internal(&db)?;
 
     // 3. Get workflow file path
     let workflow_path = get_workflow_path(&app)?;
 
-    // 4. Build workflow input
+    // 4. Calculate repository identifier and paths
+    let repo_identifier = repo
+        .local_path
+        .clone()
+        .unwrap_or_else(|| format!("{}/{}", repo.owner, repo.repo_name));
+
+    let base_clone_path = format!("{}/{}", settings.worktree_base_path, repo_identifier);
+
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    let branch_name = format!("issue-{}", request.issue_number);
+    let worktree_dir = format!("issue-{}-{}", request.issue_number, timestamp);
+    let worktree_path = format!("{}/{}", base_clone_path, worktree_dir);
+
+    // 5. Get Runner to extract token for authenticated clone URL
+    let runner = grpc
+        .find_runner_by_exact_name(&repo.mcp_server_name)
+        .await?
+        .ok_or_else(|| {
+            AppError::NotFound(format!("Runner '{}' not found", repo.mcp_server_name))
+        })?;
+
+    let token = extract_token_from_runner(&runner, repo.platform)?;
+    let clone_url = build_authenticated_clone_url(&repo.url, &token, repo.platform);
+
+    // 6. Build workflow input
     let mcp_server = match repo.platform {
         Platform::GitHub => "github",
         Platform::Gitea => "gitea",
@@ -107,8 +151,10 @@ pub async fn agent_start(
         issue_number: request.issue_number,
         issue_title: request.issue_title.clone(),
         base_branch: settings.default_base_branch.clone(),
-        worktree_base_path: settings.worktree_base_path.clone(),
-        local_repo_path: local_repo_path.clone(),
+        clone_url,
+        base_clone_path: base_clone_path.clone(),
+        worktree_path: worktree_path.clone(),
+        branch_name: branch_name.clone(),
         mcp_server: mcp_server.to_string(),
         custom_prompt: request.custom_prompt.clone(),
     };
@@ -119,21 +165,15 @@ pub async fn agent_start(
         input: serde_json::to_string(&workflow_input)?,
     };
 
-    tracing::debug!("Workflow args: {:?}", workflow_args);
+    tracing::debug!("Workflow input: {:?}", workflow_input);
 
-    // 5. Enqueue workflow job
+    // 7. Enqueue workflow job
     let args_json = serde_json::to_value(&workflow_args)?;
     let jobworkerp_job_id = grpc.enqueue_job("WORKFLOW", &args_json).await?;
 
     tracing::info!("Enqueued job with id: {}", jobworkerp_job_id);
 
-    // 6. Create agent job record in DB
-    let branch_name = format!("issue-{}", request.issue_number);
-    let worktree_path = format!(
-        "{}/issue-{}",
-        settings.worktree_base_path, request.issue_number
-    );
-
+    // 8. Create agent job record in DB
     let job_id = create_agent_job_internal(
         &db,
         request.repository_id,
@@ -145,7 +185,7 @@ pub async fn agent_start(
 
     tracing::info!("Created agent job record with id: {}", job_id);
 
-    // 7. Spawn background task for stream listening
+    // 9. Spawn background task for stream listening
     let db_pool = db.inner().clone();
     let grpc_client = grpc.inner().clone();
     let jobworkerp_job_id_clone = jobworkerp_job_id.clone();
@@ -452,4 +492,81 @@ fn update_job_error(db: &DbPool, job_id: i64, error_message: &str) -> Result<(),
     )?;
 
     Ok(())
+}
+
+// ============================================================================
+// Token extraction and clone URL building
+// ============================================================================
+
+/// Extract token from Runner's definition
+/// Supports both direct envs and Docker -e argument patterns
+fn extract_token_from_runner(
+    runner: &data::Runner,
+    platform: Platform,
+) -> Result<String, AppError> {
+    let runner_data = runner
+        .data
+        .as_ref()
+        .ok_or_else(|| AppError::Internal("Runner has no data".into()))?;
+
+    let definition: serde_json::Value = serde_json::from_str(&runner_data.definition)
+        .map_err(|e| AppError::Internal(format!("Failed to parse runner definition: {}", e)))?;
+
+    let token_key = match platform {
+        Platform::GitHub => "GITHUB_PERSONAL_ACCESS_TOKEN",
+        Platform::Gitea => "GITEA_ACCESS_TOKEN",
+    };
+
+    // Priority 1: Check envs field directly
+    if let Some(envs) = definition.get("envs").and_then(|e| e.as_object()) {
+        if let Some(token) = envs.get(token_key).and_then(|t| t.as_str()) {
+            return Ok(token.to_string());
+        }
+    }
+
+    // Priority 2: Check Docker -e arguments for KEY=VALUE pattern
+    if let Some(args) = definition.get("args").and_then(|a| a.as_array()) {
+        let args_str: Vec<&str> = args.iter().filter_map(|a| a.as_str()).collect();
+
+        for (i, arg) in args_str.iter().enumerate() {
+            if *arg == "-e" {
+                if let Some(next_arg) = args_str.get(i + 1) {
+                    let prefix = format!("{}=", token_key);
+                    if next_arg.starts_with(&prefix) {
+                        let value = next_arg.strip_prefix(&prefix).unwrap();
+                        return Ok(value.to_string());
+                    }
+                    // KEY only pattern - value should be in envs
+                    if *next_arg == token_key {
+                        if let Some(envs) = definition.get("envs").and_then(|e| e.as_object()) {
+                            if let Some(token) = envs.get(token_key).and_then(|t| t.as_str()) {
+                                return Ok(token.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Err(AppError::Internal(format!(
+        "Token '{}' not found in runner definition",
+        token_key
+    )))
+}
+
+/// Build authenticated clone URL
+/// SECURITY: This URL contains credentials - never log it
+fn build_authenticated_clone_url(repo_url: &str, token: &str, platform: Platform) -> String {
+    let url_without_scheme = repo_url.strip_prefix("https://").unwrap_or(repo_url);
+    let base_url = if url_without_scheme.ends_with(".git") {
+        url_without_scheme.to_string()
+    } else {
+        format!("{}.git", url_without_scheme)
+    };
+
+    match platform {
+        Platform::GitHub => format!("https://x-access-token:{}@{}", token, base_url),
+        Platform::Gitea => format!("https://git:{}@{}", token, base_url),
+    }
 }
