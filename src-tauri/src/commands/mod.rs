@@ -1,3 +1,4 @@
+mod agent;
 mod connection;
 mod issues;
 mod jobs;
@@ -6,6 +7,7 @@ mod pulls;
 mod repositories;
 mod settings;
 
+pub use agent::*;
 pub use connection::*;
 pub use issues::*;
 pub use jobs::*;

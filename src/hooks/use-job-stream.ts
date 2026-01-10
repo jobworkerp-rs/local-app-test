@@ -19,6 +19,13 @@ export type StreamStatus =
   | "completed"
   | "error";
 
+/** Final result from completed workflow */
+export interface WorkflowResult {
+  status: string;
+  pr_number?: number;
+  pr_url?: string;
+}
+
 const DEFAULT_MAX_CHUNKS = 1000;
 
 interface UseJobStreamOptions {
@@ -33,6 +40,14 @@ interface UseJobStreamOptions {
    * Default: true
    */
   enabled?: boolean;
+  /**
+   * Callback when workflow completes with final result
+   */
+  onComplete?: (result: WorkflowResult) => void;
+  /**
+   * Callback when an error event is received
+   */
+  onError?: (message: string) => void;
 }
 
 interface UseJobStreamResult {
@@ -44,6 +59,8 @@ interface UseJobStreamResult {
   error: Error | null;
   /** Decoded text content from all chunks */
   text: string;
+  /** Final workflow result (if completed) */
+  result: WorkflowResult | null;
   /** Reset the stream state */
   reset: () => void;
 }
@@ -51,14 +68,20 @@ interface UseJobStreamResult {
 /**
  * Hook to receive streaming job output via Tauri events
  *
- * @param jobId - The jobworkerp job ID to listen for (or null/undefined to disable)
+ * @param jobId - The local job ID to listen for (or null/undefined to disable)
  * @param options - Configuration options
  * @returns Stream state and utilities
  *
  * @example
  * ```tsx
- * function JobOutput({ jobId }: { jobId: string }) {
- *   const { text, status, error } = useJobStream(jobId);
+ * function JobOutput({ jobId }: { jobId: number }) {
+ *   const { text, status, error, result } = useJobStream(jobId, {
+ *     onComplete: (result) => {
+ *       if (result.pr_url) {
+ *         console.log('PR created:', result.pr_url);
+ *       }
+ *     },
+ *   });
  *
  *   if (status === 'error') {
  *     return <div>Error: {error?.message}</div>;
@@ -67,36 +90,39 @@ interface UseJobStreamResult {
  *   return (
  *     <pre>
  *       {text}
- *       {status === 'streaming' && <span className="animate-pulse">▋</span>}
+ *       {status === 'streaming' && <span className="animate-pulse">...</span>}
  *     </pre>
  *   );
  * }
  * ```
  */
 export function useJobStream(
-  jobId: string | null | undefined,
+  jobId: number | null | undefined,
   options: UseJobStreamOptions = {}
 ): UseJobStreamResult {
-  const { maxChunks = DEFAULT_MAX_CHUNKS, enabled = true } = options;
+  const { maxChunks = DEFAULT_MAX_CHUNKS, enabled = true, onComplete, onError } = options;
 
   const [chunks, setChunks] = useState<Uint8Array[]>([]);
   const [status, setStatus] = useState<StreamStatus>("idle");
   const [error, setError] = useState<Error | null>(null);
+  const [result, setResult] = useState<WorkflowResult | null>(null);
 
   const reset = useCallback(() => {
     setChunks([]);
     setStatus("idle");
     setError(null);
+    setResult(null);
   }, []);
 
   useEffect(() => {
-    if (!jobId || !enabled) {
+    if (jobId === null || jobId === undefined || !enabled) {
       return;
     }
 
     setStatus("connecting");
     setChunks([]);
     setError(null);
+    setResult(null);
 
     let unlisten: (() => void) | undefined;
     let mounted = true;
@@ -107,19 +133,30 @@ export function useJobStream(
           setStatus("streaming");
           setChunks((prev) => {
             const newChunks = [...prev, toUint8Array(event.data)];
-            // Memory protection: keep only the most recent maxChunks entries
             return newChunks.slice(-maxChunks);
           });
           break;
 
-        case "FinalCollected":
-          // Replace all chunks with the final collected result
-          setChunks([toUint8Array(event.data)]);
+        case "FinalCollected": {
+          const workflowResult: WorkflowResult = {
+            status: event.status,
+            pr_number: event.pr_number,
+            pr_url: event.pr_url,
+          };
+          setResult(workflowResult);
           setStatus("completed");
+          onComplete?.(workflowResult);
           break;
+        }
 
         case "End":
           setStatus("completed");
+          break;
+
+        case "Error":
+          setError(new Error(event.message));
+          setStatus("error");
+          onError?.(event.message);
           break;
       }
     };
@@ -127,7 +164,6 @@ export function useJobStream(
     listenJobStream(jobId, handleEvent)
       .then((fn) => {
         if (!mounted) {
-          // Component unmounted before promise resolved - cleanup immediately
           fn();
         } else {
           unlisten = fn;
@@ -142,12 +178,11 @@ export function useJobStream(
       mounted = false;
       unlisten?.();
     };
-  }, [jobId, enabled, maxChunks]);
+  }, [jobId, enabled, maxChunks, onComplete, onError]);
 
-  // Memoize the decoded text
   const text = useMemo(() => chunksToString(chunks), [chunks]);
 
-  return { chunks, status, error, text, reset };
+  return { chunks, status, error, text, result, reset };
 }
 
 /**
@@ -157,45 +192,47 @@ export function useJobStream(
  * appends text directly instead of accumulating chunks.
  */
 export function useJobStreamText(
-  jobId: string | null | undefined,
-  options: { enabled?: boolean } = {}
+  jobId: number | null | undefined,
+  options: { enabled?: boolean; onComplete?: (result: WorkflowResult) => void; onError?: (message: string) => void } = {}
 ): {
   text: string;
   status: StreamStatus;
   error: Error | null;
+  result: WorkflowResult | null;
   reset: () => void;
 } {
-  const { enabled = true } = options;
+  const { enabled = true, onComplete, onError } = options;
 
   const [text, setText] = useState("");
   const [status, setStatus] = useState<StreamStatus>("idle");
   const [error, setError] = useState<Error | null>(null);
+  const [result, setResult] = useState<WorkflowResult | null>(null);
 
   const reset = useCallback(() => {
     setText("");
     setStatus("idle");
     setError(null);
+    setResult(null);
   }, []);
 
   useEffect(() => {
-    if (!jobId || !enabled) {
+    if (jobId === null || jobId === undefined || !enabled) {
       return;
     }
 
     setStatus("connecting");
     setText("");
     setError(null);
+    setResult(null);
 
     let unlisten: (() => void) | undefined;
     let mounted = true;
-    // Create a new decoder for each stream session to handle incomplete multibyte sequences
     const streamDecoder = new TextDecoder("utf-8");
 
     const handleEvent = (event: StreamEvent) => {
       switch (event.type) {
         case "Data":
           setStatus("streaming");
-          // Use stream: true to buffer incomplete multibyte sequences across chunks
           setText(
             (prev) =>
               prev +
@@ -203,16 +240,19 @@ export function useJobStreamText(
           );
           break;
 
-        case "FinalCollected":
-          // Final data replaces everything - flush decoder with stream: false
-          setText(
-            streamDecoder.decode(toUint8Array(event.data), { stream: false })
-          );
+        case "FinalCollected": {
+          const workflowResult: WorkflowResult = {
+            status: event.status,
+            pr_number: event.pr_number,
+            pr_url: event.pr_url,
+          };
+          setResult(workflowResult);
           setStatus("completed");
+          onComplete?.(workflowResult);
           break;
+        }
 
         case "End":
-          // Flush any remaining buffered bytes in the decoder
           setText((prev) => {
             const remaining = streamDecoder.decode(new Uint8Array(), {
               stream: false,
@@ -220,6 +260,12 @@ export function useJobStreamText(
             return remaining ? prev + remaining : prev;
           });
           setStatus("completed");
+          break;
+
+        case "Error":
+          setError(new Error(event.message));
+          setStatus("error");
+          onError?.(event.message);
           break;
       }
     };
@@ -242,7 +288,7 @@ export function useJobStreamText(
       mounted = false;
       unlisten?.();
     };
-  }, [jobId, enabled]);
+  }, [jobId, enabled, onComplete, onError]);
 
-  return { text, status, error, reset };
+  return { text, status, error, result, reset };
 }

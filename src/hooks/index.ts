@@ -9,6 +9,7 @@ export {
   useJobStream,
   useJobStreamText,
   type StreamStatus,
+  type WorkflowResult,
 } from "./use-job-stream";
 
 // Repository and issue hooks

@@ -30,7 +30,17 @@ export interface StreamEndEvent {
  */
 export interface StreamFinalCollectedEvent {
   type: "FinalCollected";
-  data: number[];
+  status: string;
+  pr_number?: number;
+  pr_url?: string;
+}
+
+/**
+ * Stream error event
+ */
+export interface StreamErrorEvent {
+  type: "Error";
+  message: string;
 }
 
 /**
@@ -39,7 +49,8 @@ export interface StreamFinalCollectedEvent {
 export type StreamEvent =
   | StreamDataEvent
   | StreamEndEvent
-  | StreamFinalCollectedEvent;
+  | StreamFinalCollectedEvent
+  | StreamErrorEvent;
 
 // ============================================================================
 // Event Listeners
@@ -67,7 +78,7 @@ export type StreamEvent =
  * ```
  */
 export function listenJobStream(
-  jobId: string,
+  jobId: number,
   callback: (event: StreamEvent) => void
 ): Promise<UnlistenFn> {
   return listen<StreamEvent>(`job-stream-${jobId}`, (event) => {

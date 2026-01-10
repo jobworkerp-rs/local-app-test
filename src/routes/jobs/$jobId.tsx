@@ -1,11 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   type AgentJobStatus,
   ACTIVE_JOB_STATUSES,
   buildPrUrl,
 } from "@/types/models";
 import { jobQueries, repositoryQueries } from "@/lib/query";
+import { useJobStreamText, useCancelAgent } from "@/hooks";
+import { ExternalLink } from "@/components/ExternalLink";
 
 export const Route = createFileRoute("/jobs/$jobId")({
   component: JobDetailPage,
@@ -59,6 +61,7 @@ function JobDetailPage() {
   const { jobId } = Route.useParams();
   const numericJobId = Number(jobId);
   const isValidJobId = Number.isSafeInteger(numericJobId) && numericJobId > 0;
+  const queryClient = useQueryClient();
 
   const jobQuery = useQuery({
     ...jobQueries.detail(numericJobId),
@@ -73,9 +76,30 @@ function JobDetailPage() {
   });
 
   const repositoriesQuery = useQuery(repositoryQueries.list());
+  const cancelMutation = useCancelAgent();
 
   const job = jobQuery.data;
   const repository = repositoriesQuery.data?.find((r) => r.id === job?.repository_id);
+  const isActive = job ? ACTIVE_JOB_STATUSES.includes(job.status) : false;
+
+  const { text: streamOutput, status: streamStatus, result: streamResult } = useJobStreamText(
+    isActive ? numericJobId : null,
+    {
+      onComplete: () => {
+        queryClient.invalidateQueries({ queryKey: jobQueries.detail(numericJobId).queryKey });
+      },
+    }
+  );
+
+  const handleCancel = async () => {
+    if (!job) return;
+    try {
+      await cancelMutation.mutateAsync(job.jobworkerp_job_id);
+      queryClient.invalidateQueries({ queryKey: jobQueries.detail(numericJobId).queryKey });
+    } catch (error) {
+      console.error("Failed to cancel job:", error);
+    }
+  };
 
   if (!isValidJobId) {
     return (
@@ -237,6 +261,49 @@ function JobDetailPage() {
               </pre>
             </div>
           )}
+
+          {/* Streaming output */}
+          {(isActive || streamOutput || streamResult) && (
+            <div className="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold">Agent Output</h2>
+                {streamStatus === "streaming" && (
+                  <span className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400">
+                    <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                    Streaming...
+                  </span>
+                )}
+              </div>
+
+              {streamResult && (
+                <div className={`mb-4 p-3 rounded ${
+                  streamResult.status === "success"
+                    ? "bg-green-100 dark:bg-green-900/30 border border-green-200 dark:border-green-800"
+                    : streamResult.status === "no_changes"
+                      ? "bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800"
+                      : "bg-red-100 dark:bg-red-900/30 border border-red-200 dark:border-red-800"
+                }`}>
+                  <p className="font-medium">
+                    {streamResult.status === "success" && "Completed successfully!"}
+                    {streamResult.status === "no_changes" && "No changes were made."}
+                    {streamResult.status === "failed" && "Job failed."}
+                  </p>
+                  {streamResult.pr_url && (
+                    <p className="mt-2">
+                      <ExternalLink href={streamResult.pr_url} className="text-blue-600 dark:text-blue-400 hover:underline">
+                        View Pull Request #{streamResult.pr_number}
+                      </ExternalLink>
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <pre className="bg-slate-900 text-slate-100 rounded p-4 text-sm overflow-x-auto max-h-96 overflow-y-auto font-mono whitespace-pre-wrap">
+                {streamOutput || (isActive ? "Waiting for output..." : "No output captured.")}
+                {streamStatus === "streaming" && <span className="animate-pulse">▋</span>}
+              </pre>
+            </div>
+          )}
         </div>
 
         <div className="space-y-6">
@@ -269,11 +336,11 @@ function JobDetailPage() {
               {ACTIVE_JOB_STATUSES.includes(job.status) && (
                 <button
                   type="button"
-                  className="block w-full px-4 py-2 text-center border border-red-600 dark:border-red-500 text-red-600 dark:text-red-400 rounded hover:bg-red-50 dark:hover:bg-red-900/30"
-                  disabled
-                  title="Cancel functionality coming soon"
+                  onClick={handleCancel}
+                  disabled={cancelMutation.isPending}
+                  className="block w-full px-4 py-2 text-center border border-red-600 dark:border-red-500 text-red-600 dark:text-red-400 rounded hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Cancel Job
+                  {cancelMutation.isPending ? "Cancelling..." : "Cancel Job"}
                 </button>
               )}
             </div>

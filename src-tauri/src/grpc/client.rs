@@ -243,9 +243,7 @@ impl JobworkerpClient {
         let runner = self
             .find_runner_by_exact_name(server_name)
             .await?
-            .ok_or_else(|| {
-                AppError::NotFound(format!("Runner '{}' not found", server_name))
-            })?;
+            .ok_or_else(|| AppError::NotFound(format!("Runner '{}' not found", server_name)))?;
 
         let runner_data = runner
             .data
@@ -253,11 +251,9 @@ impl JobworkerpClient {
             .ok_or_else(|| AppError::Internal("Runner has no data".into()))?;
 
         // Get result_proto descriptor for this tool
-        let result_descriptor = JobworkerpProto::parse_result_schema_descriptor(
-            runner_data,
-            Some(tool_name),
-        )
-        .map_err(|e| AppError::Internal(format!("Failed to parse result schema: {}", e)))?;
+        let result_descriptor =
+            JobworkerpProto::parse_result_schema_descriptor(runner_data, Some(tool_name))
+                .map_err(|e| AppError::Internal(format!("Failed to parse result schema: {}", e)))?;
 
         // Ensure worker exists (auto-create if needed)
         let worker = match self.ensure_mcp_worker(server_name).await {
@@ -338,8 +334,8 @@ impl JobworkerpClient {
                     )?;
 
                 // Convert to JSON
-                let json_result =
-                    ProtobufDescriptor::message_to_json_value(&dynamic_message).map_err(|e| {
+                let json_result = ProtobufDescriptor::message_to_json_value(&dynamic_message)
+                    .map_err(|e| {
                         tracing::error!("Failed to convert protobuf to JSON: {}", e);
                         AppError::Internal(format!("Failed to convert to JSON: {}", e))
                     })?;

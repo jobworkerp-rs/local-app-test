@@ -1,0 +1,263 @@
+# Code Agent Workflow
+# Serverless Workflow DSL v1.0.0 based workflow for Local Code Agent Service
+# This workflow automates: Issue fetch -> Code generation -> PR creation
+document:
+  dsl: "1.0.0"
+  namespace: "local-code-agent"
+  name: "code-agent-workflow"
+  version: "1.0.0"
+
+input:
+  schema:
+    document:
+      type: object
+      properties:
+        owner:
+          type: string
+          description: "Repository owner"
+        repo:
+          type: string
+          description: "Repository name"
+        issue_number:
+          type: integer
+          description: "Issue number to resolve"
+        issue_title:
+          type: string
+          description: "Issue title"
+        base_branch:
+          type: string
+          description: "Base branch for PR"
+          default: "main"
+        worktree_base_path:
+          type: string
+          description: "Base path for git worktrees"
+        local_repo_path:
+          type: string
+          description: "Local repository clone path"
+        mcp_server:
+          type: string
+          description: "MCP server name (github or gitea)"
+      required:
+        - owner
+        - repo
+        - issue_number
+        - issue_title
+        - worktree_base_path
+        - local_repo_path
+        - mcp_server
+
+do:
+  # 1. Determine branch name and worktree path
+  - determineBranchName:
+      set:
+        branch_name: "${\"issue-\" + (.issue_number | tostring)}"
+        worktree_path: "${.worktree_base_path + \"/issue-\" + (.issue_number | tostring)}"
+
+  # 2. Main process with error handling
+  - mainProcessWithErrorHandling:
+      try:
+        # 2.1 Create worktree with new branch
+        - createWorktree:
+            run:
+              runner:
+                name: COMMAND
+                arguments:
+                  command: "git"
+                  args: "${[\"-C\", .local_repo_path, \"worktree\", \"add\", $worktree_path, \"-b\", $branch_name, .base_branch]}"
+
+        # 2.2 Fetch issue details
+        # GitHub MCP: issue_read with method="get"
+        # Gitea MCP: get_issue_by_index
+        - fetchIssue:
+            run:
+              runner:
+                name: "${.mcp_server}"
+                using: "${if .mcp_server == \"github\" then \"issue_read\" else \"get_issue_by_index\" end}"
+                arguments:
+                  owner: "${.owner}"
+                  repo: "${.repo}"
+                  issue_number: "${.issue_number}"
+            export:
+              as:
+                issue_body: "${.body // .content // \"\"}"
+                issue_labels: "${.labels // []}"
+
+        # 2.3 Fetch issue comments
+        # GitHub MCP: issue_read with method="get_comments"
+        # Gitea MCP: list_issue_comments
+        - fetchIssueComments:
+            run:
+              runner:
+                name: "${.mcp_server}"
+                using: "${if .mcp_server == \"github\" then \"issue_read\" else \"list_issue_comments\" end}"
+                arguments:
+                  owner: "${.owner}"
+                  repo: "${.repo}"
+                  issue_number: "${.issue_number}"
+                  method: "${if .mcp_server == \"github\" then \"get_comments\" else null end}"
+            export:
+              as:
+                issue_comments: "${if type == \"array\" then . else [] end}"
+
+        # 2.4 Generate prompt using Liquid template
+        - generatePrompt:
+            set:
+              agent_prompt: |
+                $${
+                Please resolve the following issue by implementing the necessary code changes.
+
+                ## Issue #{{ issue_number }}: {{ issue_title }}
+
+                {{ issue_body }}
+
+                {% if issue_comments.size > 0 %}
+                ## Additional Comments
+                {% for comment in issue_comments %}
+                ---
+                {{ comment.body }}
+
+                {% endfor %}
+                {% endif %}
+
+                ## Instructions
+                - Create or modify files as needed to resolve the issue
+                - Run tests to verify the changes work correctly
+                - Write clear, descriptive commit messages
+                - Follow the existing code style and conventions
+                }
+
+        # 2.5 Write prompt to file using base64 encoding for shell safety
+        - writePromptFile:
+            run:
+              runner:
+                name: COMMAND
+                arguments:
+                  command: "sh"
+                  args: "${[\"-c\", \"echo '\" + ($agent_prompt | encode_base64) + \"' | base64 -d > '\" + $worktree_path + \"/.agent_prompt.txt'\"]}"
+
+        # 2.6 Run Claude Code agent
+        - runAgent:
+            run:
+              runner:
+                name: COMMAND
+                arguments:
+                  command: "sh"
+                  args: "${[\"-c\", \"cd '\" + $worktree_path + \"' && claude --print < .agent_prompt.txt\"]}"
+                  with_memory_monitoring: true
+            timeout:
+              after:
+                minutes: 30
+
+        # 2.7 Check if there are changes to commit
+        - checkChanges:
+            run:
+              runner:
+                name: COMMAND
+                arguments:
+                  command: "git"
+                  args: "${[\"-C\", $worktree_path, \"status\", \"--porcelain\"]}"
+            export:
+              as:
+                git_status: "${.}"
+
+        # 2.8 Commit and push changes (only if there are changes)
+        - commitAndPush:
+            if: "${$git_status != \"\"}"
+            run:
+              runner:
+                name: COMMAND
+                arguments:
+                  command: "sh"
+                  args: "${[\"-c\", \"cd '\" + $worktree_path + \"' && git add -A && git commit -m 'Fix #\" + (.issue_number | tostring) + \": \" + .issue_title + \"' && git push -u origin '\" + $branch_name + \"'\"]}"
+
+        # 2.9 Create pull request
+        - createPR:
+            if: "${$git_status != \"\"}"
+            run:
+              runner:
+                name: "${.mcp_server}"
+                using: "create_pull_request"
+                arguments:
+                  owner: "${.owner}"
+                  repo: "${.repo}"
+                  title: "${\"Fix #\" + (.issue_number | tostring) + \": \" + .issue_title}"
+                  body: |
+                    $${
+                    ## Summary
+                    This PR addresses #{{ issue_number }}.
+
+                    ## Changes
+                    Automatically generated by Local Code Agent Service using Claude Code.
+
+                    ## Related Issue
+                    Closes #{{ issue_number }}
+                    }
+                  head: "${$branch_name}"
+                  base: "${.base_branch}"
+            export:
+              as:
+                pr_number: "${.number}"
+                pr_url: "${.html_url // \"\"}"
+
+        # 2.10 Set result for no-changes case
+        - setNoChangesResult:
+            if: "${$git_status == \"\"}"
+            set:
+              pr_number: null
+              pr_url: null
+              no_changes: true
+
+        # 2.11 Cleanup worktree on success
+        - cleanup:
+            run:
+              runner:
+                name: COMMAND
+                arguments:
+                  command: "git"
+                  args: "${[\"-C\", .local_repo_path, \"worktree\", \"remove\", $worktree_path]}"
+
+      catch:
+        as: error
+        do:
+          # Cleanup worktree on error
+          - cleanupOnError:
+              run:
+                runner:
+                  name: COMMAND
+                  arguments:
+                    command: "sh"
+                    args: "${[\"-c\", \"git -C '\" + .local_repo_path + \"' worktree remove --force '\" + $worktree_path + \"' 2>/dev/null || true\"]}"
+          # Re-raise the error
+          - raiseError:
+              raise:
+                error:
+                  type: "agent_execution_failed"
+                  status: 500
+                  title: "Agent execution failed"
+                  detail: "${$error.message // \"Unknown error\"}"
+
+output:
+  schema:
+    document:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: ["success", "no_changes", "failed"]
+          description: "Workflow execution status"
+        pr_number:
+          type: integer
+          description: "Created PR number (null if no changes)"
+        pr_url:
+          type: string
+          description: "Created PR URL (empty if no changes)"
+        no_changes:
+          type: boolean
+          description: "True if agent made no changes"
+      required:
+        - status
+  as:
+    status: "${if $error then \"failed\" else if $no_changes then \"no_changes\" else \"success\" end end}"
+    pr_number: "${$pr_number}"
+    pr_url: "${$pr_url // \"\"}"
+    no_changes: "${$no_changes // false}"

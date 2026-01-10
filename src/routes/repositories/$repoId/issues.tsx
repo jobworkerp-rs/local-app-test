@@ -1,9 +1,10 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { type Issue } from "@/types/models";
 import { ExternalLink } from "@/components/ExternalLink";
 import { repositoryQueries, issueQueries, pullQueries } from "@/lib/query";
+import { useStartAgent } from "@/hooks";
 
 /**
  * Format a date string safely, returning fallback for invalid dates
@@ -131,6 +132,8 @@ interface IssueCardProps {
 }
 
 function IssueCard({ issue, repositoryId }: IssueCardProps) {
+  const navigate = useNavigate();
+  const startAgentMutation = useStartAgent();
   const relatedPrsQuery = useQuery(pullQueries.related(repositoryId, issue.number));
 
   // Only use data when query succeeded to avoid misclassifying loading/error as "0 PRs"
@@ -138,6 +141,19 @@ function IssueCard({ issue, repositoryId }: IssueCardProps) {
   const hasOpenPr = relatedPrsQuery.isSuccess && relatedPrs.some((pr) => pr.state === "open");
   const hasMergedPr = relatedPrsQuery.isSuccess && relatedPrs.some((pr) => pr.merged);
   const hasRelatedPrs = relatedPrsQuery.isSuccess && relatedPrs.length > 0;
+
+  const handleRunAgent = async () => {
+    try {
+      const response = await startAgentMutation.mutateAsync({
+        repository_id: repositoryId,
+        issue_number: issue.number,
+        issue_title: issue.title,
+      });
+      navigate({ to: "/jobs/$jobId", params: { jobId: String(response.job_id) } });
+    } catch (error) {
+      console.error("Failed to start agent:", error);
+    }
+  };
 
   return (
     <div className="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg p-4 hover:shadow-md transition-shadow">
@@ -227,11 +243,11 @@ function IssueCard({ issue, repositoryId }: IssueCardProps) {
           {issue.state === "open" && relatedPrsQuery.isSuccess && relatedPrs.length === 0 && (
             <button
               type="button"
-              className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
-              disabled
-              title="Agent execution coming in Phase 4"
+              onClick={handleRunAgent}
+              disabled={startAgentMutation.isPending}
+              className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Run Agent
+              {startAgentMutation.isPending ? "Starting..." : "Run Agent"}
             </button>
           )}
         </div>

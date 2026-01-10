@@ -218,7 +218,7 @@ export function getJob(id: number): Promise<AgentJob> {
 }
 
 // ============================================================================
-// Agent Commands (Phase 3 - placeholders)
+// Agent Commands
 // ============================================================================
 
 export interface StartAgentRequest {
@@ -234,7 +234,6 @@ export interface StartAgentResponse {
 
 /**
  * Start an agent to process an issue
- * NOTE: Not yet implemented in backend (Phase 3)
  */
 export function startAgent(
   request: StartAgentRequest
@@ -244,7 +243,6 @@ export function startAgent(
 
 /**
  * Cancel a running agent job
- * NOTE: Not yet implemented in backend (Phase 3)
  */
 export function cancelAgent(jobworkerpJobId: string): Promise<void> {
   return invoke<void>("agent_cancel", { jobworkerpJobId });
