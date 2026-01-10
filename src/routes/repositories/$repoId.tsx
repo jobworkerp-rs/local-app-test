@@ -68,7 +68,7 @@ function RepositoryDetailPage({ repoId }: RepositoryDetailPageProps) {
     queryKey: ["issues", numericRepoId, "open"],
     queryFn: () =>
       invoke<Issue[]>("list_issues", {
-        repositoryId: numericRepoId,
+        repository_id: numericRepoId,
         state: "open",
       }),
     enabled: isValidRepoId && !!repositoryQuery.data,
@@ -78,7 +78,7 @@ function RepositoryDetailPage({ repoId }: RepositoryDetailPageProps) {
     queryKey: ["pulls", numericRepoId, "open"],
     queryFn: () =>
       invoke<PullRequest[]>("list_pulls", {
-        repositoryId: numericRepoId,
+        repository_id: numericRepoId,
         state: "open",
       }),
     enabled: isValidRepoId && !!repositoryQuery.data,

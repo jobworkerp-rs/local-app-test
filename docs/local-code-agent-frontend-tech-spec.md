@@ -698,7 +698,7 @@ export interface McpServerInfo {
 
 ## 5. ディレクトリ構成
 
-```
+```text
 local-code-agent/
 ├── .github/
 │   └── workflows/
