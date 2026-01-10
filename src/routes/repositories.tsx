@@ -1,7 +1,7 @@
 import { createFileRoute, Link, Outlet, useMatch } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
-import { useState, type FormEvent } from "react";
+import { useState, useCallback, type FormEvent } from "react";
 import {
   type Repository,
   type CreateRepositoryRequest,
@@ -29,9 +29,20 @@ function RepositoriesLayout() {
   return <RepositoriesPage />;
 }
 
+interface DeleteConfirmState {
+  isOpen: boolean;
+  repositoryId: number | null;
+  repositoryName: string;
+}
+
 function RepositoriesPage() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState>({
+    isOpen: false,
+    repositoryId: null,
+    repositoryName: "",
+  });
 
   const repositoriesQuery = useQuery({
     queryKey: ["repositories"],
@@ -47,14 +58,26 @@ function RepositoriesPage() {
     mutationFn: (id: number) => invoke("delete_repository", { id }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["repositories"] });
+      setDeleteConfirm({ isOpen: false, repositoryId: null, repositoryName: "" });
+    },
+    onError: (error) => {
+      console.error("Delete repository error:", error);
     },
   });
 
-  const handleDelete = (id: number, name: string) => {
-    if (window.confirm(`Delete repository "${name}"?`)) {
-      deleteMutation.mutate(id);
+  const openDeleteConfirm = useCallback((id: number, name: string) => {
+    setDeleteConfirm({ isOpen: true, repositoryId: id, repositoryName: name });
+  }, []);
+
+  const closeDeleteConfirm = useCallback(() => {
+    setDeleteConfirm({ isOpen: false, repositoryId: null, repositoryName: "" });
+  }, []);
+
+  const confirmDelete = useCallback(() => {
+    if (deleteConfirm.repositoryId !== null) {
+      deleteMutation.mutate(deleteConfirm.repositoryId);
     }
-  };
+  }, [deleteConfirm.repositoryId, deleteMutation]);
 
   return (
     <div className="container mx-auto p-8">
@@ -101,11 +124,25 @@ function RepositoriesPage() {
             <RepositoryCard
               key={repo.id}
               repository={repo}
-              onDelete={() => handleDelete(repo.id, repo.name)}
-              isDeleting={deleteMutation.isPending}
+              onDelete={() => openDeleteConfirm(repo.id, repo.name)}
+              isDeleting={deleteMutation.isPending && deleteConfirm.repositoryId === repo.id}
             />
           ))}
         </div>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      {deleteConfirm.isOpen && (
+        <ConfirmDialog
+          title="Delete Repository"
+          message={`Are you sure you want to delete "${deleteConfirm.repositoryName}"?`}
+          confirmLabel="Delete"
+          confirmVariant="danger"
+          isLoading={deleteMutation.isPending}
+          error={deleteMutation.error ? String(deleteMutation.error) : undefined}
+          onConfirm={confirmDelete}
+          onCancel={closeDeleteConfirm}
+        />
       )}
     </div>
   );
@@ -121,14 +158,15 @@ function RepositoryCard({ repository, onDelete, isDeleting }: RepositoryCardProp
   return (
     <div className="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg p-4 hover:shadow-md transition-shadow">
       <div className="flex justify-between items-start">
-        <Link
-          to="/repositories/$repoId"
-          params={{ repoId: String(repository.id) }}
-          className="flex-1"
-        >
-          <h3 className="text-lg font-semibold text-blue-600 dark:text-blue-400 hover:underline">
-            {repository.owner}/{repository.repo_name}
-          </h3>
+        <div className="flex-1 min-w-0">
+          <Link
+            to="/repositories/$repoId"
+            params={{ repoId: String(repository.id) }}
+          >
+            <h3 className="text-lg font-semibold text-blue-600 dark:text-blue-400 hover:underline">
+              {repository.owner}/{repository.repo_name}
+            </h3>
+          </Link>
           <p className="text-sm text-gray-500 dark:text-gray-400">
             {repository.platform} &middot; MCP: {repository.mcp_server_name}
           </p>
@@ -142,27 +180,23 @@ function RepositoryCard({ repository, onDelete, isDeleting }: RepositoryCardProp
               Last synced: {new Date(repository.last_synced_at).toLocaleString()}
             </p>
           )}
-        </Link>
-        <div className="flex gap-2 ml-4">
+        </div>
+        <div className="flex gap-2 ml-4 shrink-0">
           <a
             href={repository.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded hover:bg-gray-50 dark:hover:bg-slate-700"
-            onClick={(e) => e.stopPropagation()}
+            className="px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded hover:bg-gray-50 dark:hover:bg-slate-700 cursor-pointer"
           >
             Open
           </a>
           <button
             type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
+            onClick={onDelete}
             disabled={isDeleting}
-            className="px-3 py-1 text-sm text-red-600 dark:text-red-400 border border-red-600 dark:border-red-500 rounded hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-50"
+            className="px-3 py-1 text-sm text-red-600 dark:text-red-400 border border-red-600 dark:border-red-500 rounded hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-50 cursor-pointer"
           >
-            Delete
+            {isDeleting ? "Deleting..." : "Delete"}
           </button>
         </div>
       </div>
@@ -507,5 +541,74 @@ function RepositoryForm({ mcpServers, onSuccess }: RepositoryFormProps) {
         </>
       )}
     </form>
+  );
+}
+
+interface ConfirmDialogProps {
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  confirmVariant?: "danger" | "primary";
+  isLoading?: boolean;
+  error?: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+function ConfirmDialog({
+  title,
+  message,
+  confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
+  confirmVariant = "primary",
+  isLoading = false,
+  error,
+  onConfirm,
+  onCancel,
+}: ConfirmDialogProps) {
+  const confirmButtonClass =
+    confirmVariant === "danger"
+      ? "bg-red-600 hover:bg-red-700 text-white"
+      : "bg-blue-600 hover:bg-blue-700 text-white";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/50"
+        onClick={onCancel}
+        onKeyDown={(e) => e.key === "Escape" && onCancel()}
+      />
+
+      {/* Dialog */}
+      <div className="relative bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+        <h2 className="text-xl font-semibold mb-4">{title}</h2>
+        <p className="text-slate-600 dark:text-slate-300 mb-6">{message}</p>
+
+        {error && (
+          <p className="text-red-600 dark:text-red-400 text-sm mb-4">{error}</p>
+        )}
+
+        <div className="flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isLoading}
+            className="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50"
+          >
+            {cancelLabel}
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={isLoading}
+            className={`px-4 py-2 rounded disabled:opacity-50 ${confirmButtonClass}`}
+          >
+            {isLoading ? "Processing..." : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

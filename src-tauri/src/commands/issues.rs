@@ -21,6 +21,16 @@ fn get_read_issue_tool(platform: Platform) -> &'static str {
     }
 }
 
+/// Convert issue state to platform-specific format
+/// GitHub MCP expects uppercase: "OPEN", "CLOSED"
+/// Gitea MCP expects lowercase: "open", "closed"
+fn normalize_issue_state(state: &str, platform: Platform) -> String {
+    match platform {
+        Platform::GitHub => state.to_uppercase(),
+        Platform::Gitea => state.to_lowercase(),
+    }
+}
+
 /// Parse issue from MCP result JSON (handles both GitHub and Gitea formats)
 fn parse_issue(value: &serde_json::Value) -> Option<Issue> {
     let number_i64 = value.get("number")?.as_i64()?;
@@ -131,11 +141,12 @@ pub async fn list_issues(
 ) -> Result<Vec<Issue>, AppError> {
     let repo = get_repository_by_id(&db, repository_id)?;
     let tool_name = get_list_issues_tool(repo.platform);
+    let state_value = normalize_issue_state(&state.unwrap_or_else(|| "open".to_string()), repo.platform);
 
     let args = serde_json::json!({
         "owner": repo.owner,
         "repo": repo.repo_name,
-        "state": state.unwrap_or_else(|| "open".to_string()),
+        "state": state_value,
     });
 
     let result = grpc
