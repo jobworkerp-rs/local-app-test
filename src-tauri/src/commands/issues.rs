@@ -254,11 +254,20 @@ pub async fn get_issue(
     let repo = get_repository_by_id(&db, repository_id)?;
     let tool_name = get_read_issue_tool(repo.platform);
 
-    let args = serde_json::json!({
-        "owner": repo.owner,
-        "repo": repo.repo_name,
-        "issue_number": issue_number,
-    });
+    // Build args - GitHub MCP requires "method" parameter
+    let args = match repo.platform {
+        Platform::GitHub => serde_json::json!({
+            "owner": repo.owner,
+            "repo": repo.repo_name,
+            "issue_number": issue_number,
+            "method": "get",
+        }),
+        Platform::Gitea => serde_json::json!({
+            "owner": repo.owner,
+            "repo": repo.repo_name,
+            "issue_number": issue_number,
+        }),
+    };
 
     let result = grpc
         .call_mcp_tool(&repo.mcp_server_name, tool_name, &args)
