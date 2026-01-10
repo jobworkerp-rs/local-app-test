@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { useState } from "react";
 import { type Repository, type PullRequest } from "@/types/models";
+import { ExternalLink } from "@/components/ExternalLink";
 
 /**
  * Format a date string safely, returning fallback for invalid dates
@@ -158,14 +159,12 @@ function PullRequestCard({ pr }: PullRequestCardProps) {
           </div>
 
           <h3 className="text-lg font-semibold">
-            <a
+            <ExternalLink
               href={pr.html_url}
-              target="_blank"
-              rel="noopener noreferrer"
               className="hover:text-blue-600 dark:hover:text-blue-400"
             >
               {pr.title}
-            </a>
+            </ExternalLink>
           </h3>
 
           {(pr.head_branch || pr.base_branch) && (
@@ -184,14 +183,12 @@ function PullRequestCard({ pr }: PullRequestCardProps) {
         </div>
 
         <div className="flex flex-col gap-2 ml-4">
-          <a
+          <ExternalLink
             href={pr.html_url}
-            target="_blank"
-            rel="noopener noreferrer"
             className="px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded hover:bg-gray-50 dark:hover:bg-slate-700"
           >
             View
-          </a>
+          </ExternalLink>
         </div>
       </div>
     </div>

@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { useState } from "react";
 import { type Repository, type Issue, type PullRequest } from "@/types/models";
+import { ExternalLink } from "@/components/ExternalLink";
 
 /**
  * Format a date string safely, returning fallback for invalid dates
@@ -181,14 +182,12 @@ function IssueCard({ issue, repositoryId }: IssueCardProps) {
           </div>
 
           <h3 className="text-lg font-semibold">
-            <a
+            <ExternalLink
               href={issue.html_url}
-              target="_blank"
-              rel="noopener noreferrer"
               className="hover:text-blue-600 dark:hover:text-blue-400"
             >
               {issue.title}
-            </a>
+            </ExternalLink>
           </h3>
 
           {issue.labels.length > 0 && (
@@ -214,11 +213,9 @@ function IssueCard({ issue, repositoryId }: IssueCardProps) {
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Related PRs:</p>
               <div className="flex flex-wrap gap-2">
                 {relatedPrs.map((pr) => (
-                  <a
+                  <ExternalLink
                     key={pr.number}
                     href={pr.html_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
                     className={`text-sm px-2 py-1 rounded ${
                       pr.merged
                         ? "bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300"
@@ -228,7 +225,7 @@ function IssueCard({ issue, repositoryId }: IssueCardProps) {
                     }`}
                   >
                     #{pr.number} {pr.merged ? "(merged)" : `(${pr.state})`}
-                  </a>
+                  </ExternalLink>
                 ))}
               </div>
             </div>
@@ -236,14 +233,12 @@ function IssueCard({ issue, repositoryId }: IssueCardProps) {
         </div>
 
         <div className="flex flex-col gap-2 ml-4">
-          <a
+          <ExternalLink
             href={issue.html_url}
-            target="_blank"
-            rel="noopener noreferrer"
             className="px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded hover:bg-gray-50 dark:hover:bg-slate-700"
           >
             View
-          </a>
+          </ExternalLink>
           {issue.state === "open" && relatedPrsQuery.isSuccess && relatedPrs.length === 0 && (
             <button
               type="button"
