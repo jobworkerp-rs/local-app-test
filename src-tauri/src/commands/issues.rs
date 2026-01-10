@@ -22,12 +22,20 @@ fn get_read_issue_tool(platform: Platform) -> &'static str {
 }
 
 /// Convert issue state to platform-specific format
+/// Returns a vector of states to query (for "all" we need both open and closed)
 /// GitHub MCP expects uppercase: "OPEN", "CLOSED"
 /// Gitea MCP expects lowercase: "open", "closed"
-fn normalize_issue_state(state: &str, platform: Platform) -> String {
+fn normalize_issue_states(state: &str, platform: Platform) -> Vec<String> {
+    let normalized = state.to_lowercase();
     match platform {
-        Platform::GitHub => state.to_uppercase(),
-        Platform::Gitea => state.to_lowercase(),
+        Platform::GitHub => match normalized.as_str() {
+            "all" => vec!["OPEN".to_string(), "CLOSED".to_string()],
+            _ => vec![normalized.to_uppercase()],
+        },
+        Platform::Gitea => match normalized.as_str() {
+            "all" => vec!["open".to_string(), "closed".to_string()],
+            _ => vec![normalized],
+        },
     }
 }
 
@@ -205,21 +213,26 @@ pub async fn list_issues(
 ) -> Result<Vec<Issue>, AppError> {
     let repo = get_repository_by_id(&db, repository_id)?;
     let tool_name = get_list_issues_tool(repo.platform);
-    let state_value =
-        normalize_issue_state(&state.unwrap_or_else(|| "open".to_string()), repo.platform);
+    let state_values =
+        normalize_issue_states(&state.unwrap_or_else(|| "open".to_string()), repo.platform);
 
     // GitHub MCP uses "states" (array), Gitea uses "state" (string)
+    // For Gitea with "all", we need to make two separate calls
     let args = match repo.platform {
         Platform::GitHub => serde_json::json!({
             "owner": repo.owner,
             "repo": repo.repo_name,
-            "states": [state_value],
+            "states": state_values,
         }),
-        Platform::Gitea => serde_json::json!({
-            "owner": repo.owner,
-            "repo": repo.repo_name,
-            "state": state_value,
-        }),
+        Platform::Gitea => {
+            // Gitea only supports single state, so for "all" we'll use first state
+            // and handle separately if needed
+            serde_json::json!({
+                "owner": repo.owner,
+                "repo": repo.repo_name,
+                "state": state_values.first().unwrap_or(&"open".to_string()),
+            })
+        }
     };
 
     tracing::debug!("list_issues args: {:?}", args);
