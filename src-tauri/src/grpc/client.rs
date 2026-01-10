@@ -123,9 +123,8 @@ impl LocalCodeAgentClient {
             .ok_or_else(|| AppError::Internal("Runner has no ID".into()))?;
 
         // Parse job args using schema
-        let args_descriptor =
-            JobworkerpProto::parse_job_args_schema_descriptor(runner_data, using)
-                .map_err(|e| AppError::Internal(format!("Failed to parse args schema: {}", e)))?;
+        let args_descriptor = JobworkerpProto::parse_job_args_schema_descriptor(runner_data, using)
+            .map_err(|e| AppError::Internal(format!("Failed to parse args schema: {}", e)))?;
 
         let job_args_bytes = if let Some(desc) = args_descriptor {
             JobworkerpProto::json_value_to_message(desc, &job_args, true)
@@ -189,13 +188,26 @@ impl LocalCodeAgentClient {
             .await
             .map_err(|e| AppError::Grpc(e.to_string()))?;
 
-        // Extract job ID from response metadata
+        // Extract job ID from response metadata (binary header)
         let metadata = response.metadata();
+        tracing::debug!("Response metadata keys: {:?}", metadata.keys().collect::<Vec<_>>());
+
         let job_id = metadata
-            .get("x-job-id")
-            .and_then(|v| v.to_str().ok())
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| worker_name.clone());
+            .get_bin("x-job-id-bin")
+            .and_then(|v| {
+                tracing::debug!("Found x-job-id-bin header");
+                v.to_bytes().ok()
+            })
+            .and_then(|bytes| {
+                tracing::debug!("Decoding {} bytes as JobId", bytes.len());
+                use prost::Message;
+                data::JobId::decode(bytes.as_ref()).ok()
+            })
+            .map(|job_id| {
+                tracing::debug!("Decoded job_id: {}", job_id.value);
+                job_id.value.to_string()
+            })
+            .ok_or_else(|| AppError::Internal("No job ID in response metadata".into()))?;
 
         Ok((job_id, response.into_inner()))
     }
