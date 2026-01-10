@@ -15,7 +15,7 @@ function formatDate(dateStr: string | null | undefined, fallback = "-"): string 
   return date.toLocaleDateString();
 }
 
-export const Route = createFileRoute("/repositories/$repoId/issues")({
+export const Route = createFileRoute("/repositories/$repoId/issues/")({
   component: RepositoryIssuesPage,
 });
 

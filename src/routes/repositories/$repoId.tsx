@@ -30,9 +30,13 @@ export const Route = createFileRoute("/repositories/$repoId")({
 function RepositoryDetailLayout() {
   const { repoId } = Route.useParams();
 
-  // Check if we're on a child route (issues or pulls)
-  const issuesMatch = useMatch({
-    from: "/repositories/$repoId/issues",
+  // Check if we're on a child route (issues, issue detail, or pulls)
+  const issuesListMatch = useMatch({
+    from: "/repositories/$repoId/issues/",
+    shouldThrow: false,
+  });
+  const issueDetailMatch = useMatch({
+    from: "/repositories/$repoId/issues/$issueNumber",
     shouldThrow: false,
   });
   const pullsMatch = useMatch({
@@ -41,7 +45,7 @@ function RepositoryDetailLayout() {
   });
 
   // If we're on a child route, render the child via Outlet
-  if (issuesMatch || pullsMatch) {
+  if (issuesListMatch || issueDetailMatch || pullsMatch) {
     return <Outlet />;
   }
 
