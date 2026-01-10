@@ -699,39 +699,32 @@ export interface McpServerInfo {
 ## 5. ディレクトリ構成
 
 ```
-local-code-agent-frontend/
+local-code-agent/
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml
 │       └── release.yml
 ├── src/                          # WebView (TypeScript/React)
 │   ├── main.tsx                  # エントリポイント
-│   ├── App.tsx                   # ルートコンポーネント
 │   ├── routes/                   # TanStack Router ファイルベースルーティング
 │   │   ├── __root.tsx            # ルートレイアウト
 │   │   ├── index.tsx             # / ダッシュボード
-│   │   ├── platforms/
-│   │   │   ├── index.tsx         # /platforms 一覧
-│   │   │   └── new.tsx           # /platforms/new 新規追加
+│   │   ├── repositories.tsx      # /repositories レイアウト + リポジトリ一覧
 │   │   ├── repositories/
-│   │   │   ├── index.tsx         # /repositories 一覧
-│   │   │   └── $id/
-│   │   │       ├── index.tsx     # /repositories/$id 詳細
-│   │   │       ├── issues.tsx    # /repositories/$id/issues
-│   │   │       └── pulls.tsx     # /repositories/$id/pulls
+│   │   │   ├── $repoId.tsx       # /repositories/$repoId 詳細
+│   │   │   └── $repoId/
+│   │   │       ├── issues.tsx    # /repositories/$repoId/issues
+│   │   │       └── pulls.tsx     # /repositories/$repoId/pulls
 │   │   ├── jobs/
 │   │   │   ├── index.tsx         # /jobs 一覧
-│   │   │   └── $id.tsx           # /jobs/$id 詳細（ストリーミング）
+│   │   │   └── $jobId.tsx        # /jobs/$jobId 詳細（ストリーミング）
 │   │   └── settings.tsx          # /settings
 │   ├── components/
 │   │   ├── ui/                   # shadcn/ui
 │   │   ├── layout/
 │   │   │   ├── header.tsx
 │   │   │   ├── sidebar.tsx
-│   │   │   └── nav.tsx
-│   │   ├── platforms/
-│   │   │   ├── platform-card.tsx
-│   │   │   └── platform-form.tsx
+│   │   │   └── index.ts
 │   │   ├── repositories/
 │   │   │   ├── repo-card.tsx
 │   │   │   └── repo-selector.tsx
@@ -747,7 +740,6 @@ local-code-agent-frontend/
 │   ├── hooks/
 │   │   ├── use-job-stream.ts     # Tauriイベントベースストリーミング
 │   │   ├── use-job-status.ts     # ステータスポーリング
-│   │   ├── use-platform.ts
 │   │   ├── use-repository.ts
 │   │   └── use-tauri.ts          # Tauri invoke/listen ラッパー
 │   ├── lib/
@@ -757,21 +749,15 @@ local-code-agent-frontend/
 │   │   │   └── types.ts          # Rust⇔TS共有型定義
 │   │   ├── query/
 │   │   │   ├── query-client.ts   # TanStack Query設定
-│   │   │   ├── platforms.ts      # プラットフォームクエリ
 │   │   │   ├── repositories.ts   # リポジトリクエリ
 │   │   │   ├── issues.ts         # Issueクエリ
 │   │   │   └── jobs.ts           # ジョブクエリ
-│   │   └── utils/
-│   │       ├── date.ts
-│   │       └── error.ts
+│   │   └── utils.ts
 │   ├── stores/
 │   │   ├── ui-store.ts           # UIステート（Zustand）
 │   │   └── preferences-store.ts
 │   ├── types/
-│   │   ├── platform.ts
-│   │   ├── repository.ts
-│   │   ├── issue.ts
-│   │   └── agent-job.ts
+│   │   └── models.ts             # 統合型定義
 │   ├── routeTree.gen.ts          # TanStack Router自動生成
 │   └── config/
 │       └── env.ts
@@ -786,26 +772,25 @@ local-code-agent-frontend/
 │   │   ├── lib.rs                # Tauriアプリ初期化
 │   │   ├── commands/             # Tauriコマンド定義
 │   │   │   ├── mod.rs
-│   │   │   ├── platform.rs       # platform::create, list, delete
-│   │   │   ├── repository.rs     # repository::add, sync, list
-│   │   │   ├── agent.rs          # agent::start, cancel, status
-│   │   │   └── job.rs            # job::stream (イベント発火)
+│   │   │   ├── connection.rs     # 接続確認
+│   │   │   ├── mcp.rs            # MCP管理（list, check, create_runner）
+│   │   │   ├── repositories.rs   # repository::add, sync, list
+│   │   │   ├── issues.rs         # issue一覧・詳細
+│   │   │   ├── pulls.rs          # PR一覧・関連PR検出
+│   │   │   ├── jobs.rs           # job一覧・詳細
+│   │   │   └── settings.rs       # 設定取得・更新
 │   │   ├── grpc/                 # gRPCクライアント (tonic)
 │   │   │   ├── mod.rs
-│   │   │   ├── client.rs         # gRPC接続管理
-│   │   │   └── proto/            # tonic-build生成コード
-│   │   │       └── jobworkerp.rs
+│   │   │   ├── client.rs         # gRPC接続管理、MCP呼び出し
+│   │   │   └── generated/        # tonic-build生成コード
+│   │   │       ├── jobworkerp.data.rs
+│   │   │       └── jobworkerp.service.rs
 │   │   ├── db/                   # SQLite操作 (rusqlite)
 │   │   │   ├── mod.rs
 │   │   │   ├── connection.rs     # コネクションプール
-│   │   │   ├── migrations/       # SQLマイグレーション
-│   │   │   │   ├── V1__initial.sql
-│   │   │   │   └── mod.rs
-│   │   │   └── repositories/     # データアクセス層
-│   │   │       ├── mod.rs
-│   │   │       ├── platform.rs
-│   │   │       ├── repository.rs
-│   │   │       └── agent_job.rs
+│   │   │   ├── models.rs         # データモデル定義
+│   │   │   ├── queries.rs        # DBクエリ関数
+│   │   │   └── migrations.rs     # SQLマイグレーション
 │   │   ├── crypto/               # 暗号化 (aes-gcm)
 │   │   │   ├── mod.rs
 │   │   │   └── token.rs          # トークン暗号化/復号
@@ -826,6 +811,9 @@ local-code-agent-frontend/
 ├── package.json
 └── README.md
 ```
+
+> **注記**: 現在の実装ではプラットフォーム専用ページ（/platforms）は未実装。
+> MCPサーバーの動的登録はリポジトリ登録フォーム内で直接行う設計としている。
 
 ### 5.1 Tauri固有ファイル
 

@@ -5,12 +5,14 @@ mod error;
 mod grpc;
 mod state;
 
+use dotenv::dotenv;
 use state::AppState;
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Initialize tracing
+    dotenv().ok();
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()

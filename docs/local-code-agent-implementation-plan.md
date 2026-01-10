@@ -448,14 +448,18 @@ pnpm dlx shadcn@latest add button card dialog table badge
 ```
 
 ### 成果物
-- [x] MCPサーバー一覧表示
-- [x] リポジトリ登録・一覧表示
-- [x] Issue一覧表示（フィルタリング可能）
-- [x] 関連PR検出・警告表示
-- [ ] Runner/Worker管理メソッド（gRPCクライアント拡張）
-- [ ] MCPサーバー（Runner）動的登録機能
-- [ ] Worker自動作成機能（ensure_mcp_worker）
-- [ ] リポジトリ登録フォーム拡張（MCPサーバー選択/新規作成UI）
+- [x] MCPサーバー一覧表示（`mcp_list_servers`コマンド実装済）
+- [x] MCPサーバー接続確認（`mcp_check_connection`コマンド実装済）
+- [x] Runner/Worker管理メソッド（`find_runner_by_name`, `find_worker_by_name`, `create_runner`, `create_worker`実装済）
+- [x] Worker自動作成機能（`ensure_mcp_worker`実装済）
+- [x] MCPサーバー（Runner）動的登録機能（`mcp_create_runner`コマンド実装済）
+- [x] MCP呼び出し実装（`call_mcp_tool`メソッド実装済）
+- [x] リポジトリ登録・一覧表示（`create_repository`, `list_repositories`, `get_repository`, `delete_repository`実装済）
+- [x] Issue一覧表示（`list_issues`, `get_issue`実装済、stateフィルター対応）
+- [x] PR一覧表示（`list_pulls`実装済）
+- [x] 関連PR検出・警告表示（`find_related_prs`実装済、title/body/branch正規表現マッチ）
+- [x] リポジトリ登録フォーム拡張（MCPサーバー選択/新規作成UI実装済 - `src/routes/repositories.tsx`）
+- [x] フロントエンド基本画面（TanStack Router、ダッシュボード、リポジトリ一覧/詳細、設定画面）
 
 ---
 
