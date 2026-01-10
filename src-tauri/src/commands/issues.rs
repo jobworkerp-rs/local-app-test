@@ -22,20 +22,17 @@ fn get_read_issue_tool(platform: Platform) -> &'static str {
 }
 
 /// Convert issue state to platform-specific format
-/// Returns a vector of states to query (for "all" we need both open and closed)
-/// GitHub MCP expects uppercase: "OPEN", "CLOSED"
-/// Gitea MCP expects lowercase: "open", "closed"
-fn normalize_issue_states(state: &str, platform: Platform) -> Vec<String> {
+/// GitHub MCP expects uppercase: "OPEN", "CLOSED", or omit for all
+/// Gitea MCP expects lowercase: "open", "closed", "all"
+/// Returns None for "all" on GitHub (omitting the parameter returns both)
+fn normalize_issue_state(state: &str, platform: Platform) -> Option<String> {
     let normalized = state.to_lowercase();
     match platform {
         Platform::GitHub => match normalized.as_str() {
-            "all" => vec!["OPEN".to_string(), "CLOSED".to_string()],
-            _ => vec![normalized.to_uppercase()],
+            "all" => None, // Omit parameter to get both open and closed
+            _ => Some(normalized.to_uppercase()),
         },
-        Platform::Gitea => match normalized.as_str() {
-            "all" => vec!["open".to_string(), "closed".to_string()],
-            _ => vec![normalized],
-        },
+        Platform::Gitea => Some(normalized),
     }
 }
 
@@ -213,33 +210,28 @@ pub async fn list_issues(
 ) -> Result<Vec<Issue>, AppError> {
     let repo = get_repository_by_id(&db, repository_id)?;
     let tool_name = get_list_issues_tool(repo.platform);
-    let state_values =
-        normalize_issue_states(&state.unwrap_or_else(|| "open".to_string()), repo.platform);
+    let state_str = state.unwrap_or_else(|| "open".to_string());
+    tracing::debug!("list_issues called with state: '{}'", state_str);
+    let state_value = normalize_issue_state(&state_str, repo.platform);
+    tracing::debug!("normalized state_value: {:?}", state_value);
 
-    // GitHub MCP uses "states" (array), Gitea uses "state" (string)
-    // For Gitea with "all", we need to make two separate calls
-    let args = match repo.platform {
-        Platform::GitHub => serde_json::json!({
-            "owner": repo.owner,
-            "repo": repo.repo_name,
-            "states": state_values,
-        }),
-        Platform::Gitea => {
-            // Gitea only supports single state, so for "all" we'll use first state
-            // and handle separately if needed
-            serde_json::json!({
-                "owner": repo.owner,
-                "repo": repo.repo_name,
-                "state": state_values.first().unwrap_or(&"open".to_string()),
-            })
-        }
-    };
+    // Build args - GitHub MCP uses "state" (singular), omit for "all"
+    let mut args = serde_json::json!({
+        "owner": repo.owner,
+        "repo": repo.repo_name,
+    });
+
+    // Add state parameter only if not "all" (for GitHub, omitting returns both)
+    if let Some(state_val) = state_value {
+        args["state"] = serde_json::Value::String(state_val);
+    }
 
     tracing::debug!("list_issues args: {:?}", args);
 
     let result = grpc
         .call_mcp_tool(&repo.mcp_server_name, tool_name, &args)
         .await?;
+
     extract_issues_from_result(&result, &repo.url, repo.platform)
 }
 
