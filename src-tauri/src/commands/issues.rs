@@ -22,9 +22,10 @@ fn get_read_issue_tool(platform: Platform) -> &'static str {
 }
 
 /// Get the MCP tool name for listing issue comments based on platform
+/// Note: GitHub MCP uses "issue_read" with method="get_comments"
 fn get_list_issue_comments_tool(platform: Platform) -> &'static str {
     match platform {
-        Platform::GitHub => "list_issue_comments",
+        Platform::GitHub => "issue_read",
         Platform::Gitea => "get_issue_comments",
     }
 }
@@ -383,11 +384,20 @@ pub async fn get_issue_comments(
     let repo = get_repository_by_id(&db, repository_id)?;
     let tool_name = get_list_issue_comments_tool(repo.platform);
 
-    let args = serde_json::json!({
-        "owner": repo.owner,
-        "repo": repo.repo_name,
-        "issue_number": issue_number,
-    });
+    // Build args - GitHub MCP uses issue_read with method="get_comments"
+    let args = match repo.platform {
+        Platform::GitHub => serde_json::json!({
+            "owner": repo.owner,
+            "repo": repo.repo_name,
+            "issue_number": issue_number,
+            "method": "get_comments",
+        }),
+        Platform::Gitea => serde_json::json!({
+            "owner": repo.owner,
+            "repo": repo.repo_name,
+            "issue_number": issue_number,
+        }),
+    };
 
     tracing::debug!("get_issue_comments args: {:?}", args);
 
