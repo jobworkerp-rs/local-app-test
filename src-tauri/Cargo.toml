@@ -14,7 +14,6 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
-tonic-build = "0.12"
 
 [dependencies]
 tauri = { version = "2", features = ["devtools"] }
@@ -26,10 +25,14 @@ thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# gRPC client
-tonic = "0.12"
-prost = "0.13"
-prost-types = "0.13"
+# jobworkerp client (includes proto types and helper functions)
+jobworkerp-client = { git = "https://github.com/jobworkerp-rs/jobworkerp-client-rs.git", default-features = false }
+command-utils = { git = "https://github.com/sutr-app/command-utils.git" }
+
+# gRPC/Protobuf (same version as jobworkerp-client)
+tonic = "0.14"
+prost = "0.14"
+prost-types = "0.14"
 
 # Database
 rusqlite = { version = "0.32", features = ["bundled"] }

@@ -14,6 +14,10 @@ use super::service::{
     RunnerNameRequest, WorkerNameRequest,
 };
 
+// jobworkerp-client for dynamic protobuf decoding
+use command_utils::protobuf::ProtobufDescriptor;
+use jobworkerp_client::proto::JobworkerpProto;
+
 /// gRPC client for jobworkerp-rs
 ///
 /// Uses lazy channel initialization to avoid requiring Tokio runtime at construction time.
@@ -220,6 +224,9 @@ impl JobworkerpClient {
     ///
     /// Worker auto-provisioning: If a Worker doesn't exist for the given MCP server,
     /// one will be automatically created (provided a Runner exists).
+    ///
+    /// Result decoding: The result is decoded using the result_proto schema from
+    /// the Runner's method_proto_map, then converted to JSON.
     pub async fn call_mcp_tool(
         &self,
         server_name: &str,
@@ -231,6 +238,26 @@ impl JobworkerpClient {
             server_name,
             tool_name
         );
+
+        // Get Runner info for result_proto schema
+        let runner = self
+            .find_runner_by_exact_name(server_name)
+            .await?
+            .ok_or_else(|| {
+                AppError::NotFound(format!("Runner '{}' not found", server_name))
+            })?;
+
+        let runner_data = runner
+            .data
+            .as_ref()
+            .ok_or_else(|| AppError::Internal("Runner has no data".into()))?;
+
+        // Get result_proto descriptor for this tool
+        let result_descriptor = JobworkerpProto::parse_result_schema_descriptor(
+            runner_data,
+            Some(tool_name),
+        )
+        .map_err(|e| AppError::Internal(format!("Failed to parse result schema: {}", e)))?;
 
         // Ensure worker exists (auto-create if needed)
         let worker = match self.ensure_mcp_worker(server_name).await {
@@ -290,26 +317,45 @@ impl JobworkerpClient {
             }
         }
 
-        // Parse result as JSON
-        // MCP results are typically JSON with "content" array containing text results
+        // Decode result using result_proto schema
         if result_bytes.is_empty() {
             return Ok(serde_json::json!(null));
         }
 
-        let result: serde_json::Value = serde_json::from_slice(&result_bytes).map_err(|e| {
-            tracing::trace!(
-                "Failed to parse MCP result as JSON: {}. Raw bytes: {:?}",
-                e,
-                String::from_utf8_lossy(&result_bytes)
-            );
-            AppError::Internal(format!(
-                "Failed to parse MCP result as JSON: {} (response size: {} bytes)",
-                e,
-                result_bytes.len()
-            ))
-        })?;
+        match result_descriptor {
+            Some(desc) => {
+                // Decode protobuf using dynamic schema
+                let dynamic_message =
+                    ProtobufDescriptor::get_message_from_bytes(desc, &result_bytes).map_err(
+                        |e| {
+                            tracing::error!("Failed to decode protobuf: {}", e);
+                            AppError::Internal(format!("Failed to decode protobuf: {}", e))
+                        },
+                    )?;
 
-        Ok(result)
+                // Convert to JSON
+                ProtobufDescriptor::message_to_json_value(&dynamic_message).map_err(|e| {
+                    tracing::error!("Failed to convert protobuf to JSON: {}", e);
+                    AppError::Internal(format!("Failed to convert to JSON: {}", e))
+                })
+            }
+            None => {
+                // No result_proto schema, try JSON fallback
+                tracing::debug!(
+                    "No result_proto for tool '{}', attempting JSON parse",
+                    tool_name
+                );
+                serde_json::from_slice(&result_bytes).map_err(|e| {
+                    let raw_content = String::from_utf8_lossy(&result_bytes);
+                    tracing::error!(
+                        "Failed to parse result as JSON: {}. Raw content: {}",
+                        e,
+                        raw_content
+                    );
+                    AppError::Internal(format!("Failed to parse as JSON: {}", e))
+                })
+            }
+        }
     }
 
     /// List MCP server runners
