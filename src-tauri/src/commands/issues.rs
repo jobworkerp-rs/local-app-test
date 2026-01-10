@@ -100,24 +100,38 @@ fn parse_issue(value: &serde_json::Value) -> Option<Issue> {
 }
 
 /// Extract issues from MCP result
-/// MCP results typically have a "content" array with text content
+/// Handles multiple formats:
+/// 1. GitHub MCP: {"issues": [...], "pageInfo": {...}, "totalCount": N}
+/// 2. MCP content structure: {"content": [{"text": "..."}]}
+/// 3. Direct array: [...]
+/// 4. Single issue object: {"number": ...}
 fn extract_issues_from_result(result: &serde_json::Value) -> Result<Vec<Issue>, AppError> {
     tracing::debug!("extract_issues_from_result: {:?}", result);
 
-    // First, try to extract from MCP content structure
+    // GitHub MCP format: {"issues": [...], "pageInfo": {...}}
+    if let Some(issues_arr) = result.get("issues").and_then(|i| i.as_array()) {
+        tracing::debug!("Found 'issues' field with {} items", issues_arr.len());
+        return Ok(issues_arr.iter().filter_map(parse_issue).collect());
+    }
+
+    // MCP content structure: {"content": [{"text": "..."}]}
     if let Some(content) = result.get("content").and_then(|c| c.as_array()) {
         tracing::debug!("Found content array with {} items", content.len());
         for item in content {
             if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
                 tracing::debug!("Found text content: {}", &text[..text.len().min(500)]);
-                // Parse the text as JSON
                 if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(text) {
+                    // Try GitHub format within text
+                    if let Some(issues_arr) = parsed.get("issues").and_then(|i| i.as_array()) {
+                        tracing::debug!("Parsed text contains 'issues' field with {} items", issues_arr.len());
+                        return Ok(issues_arr.iter().filter_map(parse_issue).collect());
+                    }
+                    // Try direct array within text
                     if let Some(arr) = parsed.as_array() {
                         tracing::debug!("Parsed as array with {} items", arr.len());
                         return Ok(arr.iter().filter_map(parse_issue).collect());
-                    } else {
-                        tracing::debug!("Parsed JSON is not an array: {:?}", parsed);
                     }
+                    tracing::debug!("Parsed JSON has neither 'issues' nor array: {:?}", parsed);
                 } else {
                     tracing::debug!("Failed to parse text as JSON");
                 }
