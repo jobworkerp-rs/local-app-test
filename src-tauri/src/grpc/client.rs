@@ -325,6 +325,10 @@ impl JobworkerpClient {
         match result_descriptor {
             Some(desc) => {
                 // Decode protobuf using dynamic schema
+                tracing::debug!(
+                    "Decoding protobuf with descriptor, bytes len: {}",
+                    result_bytes.len()
+                );
                 let dynamic_message =
                     ProtobufDescriptor::get_message_from_bytes(desc, &result_bytes).map_err(
                         |e| {
@@ -334,10 +338,18 @@ impl JobworkerpClient {
                     )?;
 
                 // Convert to JSON
-                ProtobufDescriptor::message_to_json_value(&dynamic_message).map_err(|e| {
-                    tracing::error!("Failed to convert protobuf to JSON: {}", e);
-                    AppError::Internal(format!("Failed to convert to JSON: {}", e))
-                })
+                let json_result =
+                    ProtobufDescriptor::message_to_json_value(&dynamic_message).map_err(|e| {
+                        tracing::error!("Failed to convert protobuf to JSON: {}", e);
+                        AppError::Internal(format!("Failed to convert to JSON: {}", e))
+                    })?;
+
+                tracing::info!(
+                    "call_mcp_tool result JSON: {}",
+                    serde_json::to_string(&json_result).unwrap_or_else(|_| "?".to_string())
+                );
+
+                Ok(json_result)
             }
             None => {
                 // No result_proto schema, try JSON fallback

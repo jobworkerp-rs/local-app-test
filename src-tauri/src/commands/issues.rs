@@ -114,16 +114,30 @@ fn extract_issues_from_result(result: &serde_json::Value) -> Result<Vec<Issue>, 
         return Ok(issues_arr.iter().filter_map(parse_issue).collect());
     }
 
-    // MCP content structure: {"content": [{"text": "..."}]}
+    // MCP content structure: {"content": [{"text": {"text": "..."}}]} or {"content": [{"text": "..."}]}
     if let Some(content) = result.get("content").and_then(|c| c.as_array()) {
         tracing::debug!("Found content array with {} items", content.len());
         for item in content {
-            if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
+            // Try nested text.text structure first (Protobuf decoded format)
+            let text_str = item
+                .get("text")
+                .and_then(|t| {
+                    // Try {"text": {"text": "..."}} format
+                    t.get("text")
+                        .and_then(|inner| inner.as_str())
+                        // Fallback to {"text": "..."} format
+                        .or_else(|| t.as_str())
+                });
+
+            if let Some(text) = text_str {
                 tracing::debug!("Found text content: {}", &text[..text.len().min(500)]);
                 if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(text) {
                     // Try GitHub format within text
                     if let Some(issues_arr) = parsed.get("issues").and_then(|i| i.as_array()) {
-                        tracing::debug!("Parsed text contains 'issues' field with {} items", issues_arr.len());
+                        tracing::debug!(
+                            "Parsed text contains 'issues' field with {} items",
+                            issues_arr.len()
+                        );
                         return Ok(issues_arr.iter().filter_map(parse_issue).collect());
                     }
                     // Try direct array within text
