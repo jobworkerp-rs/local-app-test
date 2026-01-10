@@ -137,10 +137,6 @@ function JobDetailPage() {
     );
   }
 
-  const issueUrl = repository
-    ? `${repository.url}/issues/${job.issue_number}`
-    : null;
-
   const prUrl = repository && job.pr_number
     ? buildPrUrl(repository, job.pr_number)
     : null;
@@ -183,15 +179,17 @@ function JobDetailPage() {
               <div>
                 <dt className="text-sm text-gray-500 dark:text-gray-400">Issue</dt>
                 <dd className="font-medium">
-                  {issueUrl ? (
-                    <a
-                      href={issueUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                  {repository ? (
+                    <Link
+                      to="/repositories/$repoId/issues/$issueNumber"
+                      params={{
+                        repoId: String(job.repository_id),
+                        issueNumber: String(job.issue_number),
+                      }}
                       className="text-blue-600 dark:text-blue-400 hover:underline"
                     >
                       #{job.issue_number}
-                    </a>
+                    </Link>
                   ) : (
                     `#${job.issue_number}`
                   )}
@@ -311,15 +309,17 @@ function JobDetailPage() {
             <h2 className="text-xl font-semibold mb-4">Actions</h2>
 
             <div className="space-y-3">
-              {issueUrl && (
-                <a
-                  href={issueUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
+              {repository && (
+                <Link
+                  to="/repositories/$repoId/issues/$issueNumber"
+                  params={{
+                    repoId: String(job.repository_id),
+                    issueNumber: String(job.issue_number),
+                  }}
                   className="block w-full px-4 py-2 text-center border border-slate-300 dark:border-slate-600 rounded hover:bg-gray-50 dark:hover:bg-slate-700"
                 >
                   View Issue
-                </a>
+                </Link>
               )}
 
               {prUrl && (
