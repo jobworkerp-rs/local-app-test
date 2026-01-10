@@ -312,7 +312,12 @@ function RepositoryForm({ mcpServers, onSuccess }: RepositoryFormProps) {
   };
 
   // Check if the form can be submitted
-  const canSubmit = mcpSelection !== "" && mcpSelection !== "new" && formData.mcp_server_name !== "";
+  const canSubmit =
+    mcpSelection !== "" &&
+    mcpSelection !== "new" &&
+    formData.mcp_server_name !== "" &&
+    formData.owner.trim() !== "" &&
+    formData.repo_name.trim() !== "";
 
   return (
     <form onSubmit={handleSubmit} className="border border-slate-200 dark:border-slate-700 rounded-lg p-6 mb-6 bg-gray-50 dark:bg-slate-800">

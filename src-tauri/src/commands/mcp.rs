@@ -86,7 +86,7 @@ pub async fn mcp_create_runner(
     validate_toml_value(&url, "URL")?;
 
     // Check if runner with this name already exists
-    if let Some(_existing) = grpc.find_runner_by_name(&name).await? {
+    if let Some(_existing) = grpc.find_runner_by_exact_name(&name).await? {
         return Err(AppError::InvalidInput(format!(
             "Runner with name '{}' already exists",
             name

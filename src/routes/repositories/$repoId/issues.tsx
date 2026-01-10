@@ -29,7 +29,7 @@ function RepositoryIssuesPage() {
   const repositoryQuery = useQuery({
     queryKey: ["repository", numericRepoId],
     queryFn: () =>
-      invoke<Repository>("get_repository", { repositoryId: numericRepoId }),
+      invoke<Repository>("get_repository", { repository_id: numericRepoId }),
     enabled: isValidRepoId,
   });
 
@@ -37,7 +37,7 @@ function RepositoryIssuesPage() {
     queryKey: ["issues", numericRepoId, stateFilter],
     queryFn: () =>
       invoke<Issue[]>("list_issues", {
-        repositoryId: numericRepoId,
+        repository_id: numericRepoId,
         state: stateFilter,
       }),
     enabled: isValidRepoId && repositoryQuery.isSuccess,
@@ -141,8 +141,8 @@ function IssueCard({ issue, repositoryId }: IssueCardProps) {
     queryKey: ["related-prs", repositoryId, issue.number],
     queryFn: () =>
       invoke<PullRequest[]>("find_related_prs", {
-        repositoryId: repositoryId,
-        issueNumber: issue.number,
+        repository_id: repositoryId,
+        issue_number: issue.number,
       }),
     staleTime: 60000, // Cache for 1 minute
   });

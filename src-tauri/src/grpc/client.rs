@@ -340,8 +340,11 @@ impl JobworkerpClient {
 
     // ===== Runner Management =====
 
-    /// Find a runner by name
-    pub async fn find_runner_by_name(&self, name: &str) -> Result<Option<data::Runner>, AppError> {
+    /// Find a runner by exact name match
+    pub async fn find_runner_by_exact_name(
+        &self,
+        name: &str,
+    ) -> Result<Option<data::Runner>, AppError> {
         let mut client = self.runner_client().await;
 
         let request = RunnerNameRequest {
@@ -434,7 +437,7 @@ impl JobworkerpClient {
         tracing::debug!("Worker '{}' not found, looking for runner", mcp_server_name);
 
         // 2. Find the runner (must exist)
-        let runner = self.find_runner_by_name(mcp_server_name).await?;
+        let runner = self.find_runner_by_exact_name(mcp_server_name).await?;
 
         tracing::debug!(
             "Runner lookup result for '{}': {:?}",

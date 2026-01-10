@@ -25,22 +25,29 @@ pub fn get_repository_by_id(db: &DbPool, id: i64) -> Result<Repository, AppError
         Option<String>,
         String,
         String,
-    ) = stmt.query_row([id], |row| {
-        Ok((
-            row.get(0)?,
-            row.get(1)?,
-            row.get(2)?,
-            row.get(3)?,
-            row.get(4)?,
-            row.get(5)?,
-            row.get(6)?,
-            row.get(7)?,
-            row.get(8)?,
-            row.get(9)?,
-            row.get(10)?,
-            row.get(11)?,
-        ))
-    })?;
+    ) = stmt
+        .query_row([id], |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+                row.get(5)?,
+                row.get(6)?,
+                row.get(7)?,
+                row.get(8)?,
+                row.get(9)?,
+                row.get(10)?,
+                row.get(11)?,
+            ))
+        })
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => {
+                AppError::NotFound(format!("Repository not found: id={}", id))
+            }
+            _ => AppError::from(e),
+        })?;
 
     let platform: Platform = row_data
         .2

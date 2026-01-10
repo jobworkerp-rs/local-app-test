@@ -28,7 +28,7 @@ const statusConfig: Record<AgentJobStatus, { label: string; color: string; darkC
 function JobsPage() {
   const jobsQuery = useQuery({
     queryKey: ["agent-jobs"],
-    queryFn: () => invoke<AgentJob[]>("list_jobs", { repositoryId: null, status: null }),
+    queryFn: () => invoke<AgentJob[]>("list_jobs", { repository_id: null, status: null }),
     refetchInterval: 5000,
   });
 
