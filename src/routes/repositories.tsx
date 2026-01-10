@@ -1,6 +1,5 @@
 import { createFileRoute, Link, Outlet, useMatch } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { invoke } from "@tauri-apps/api/core";
 import { useState, useCallback, type FormEvent } from "react";
 import {
   type Repository,
@@ -9,6 +8,12 @@ import {
   type CreateMcpRunnerRequest,
   getGiteaWebBaseUrl,
 } from "@/types/models";
+import { repositoryQueries, mcpServerQueries, queryKeys } from "@/lib/query";
+import {
+  createRepository,
+  deleteRepository,
+  createMcpRunner,
+} from "@/lib/tauri/commands";
 
 export const Route = createFileRoute("/repositories")({
   component: RepositoriesLayout,
@@ -44,20 +49,13 @@ function RepositoriesPage() {
     repositoryName: "",
   });
 
-  const repositoriesQuery = useQuery({
-    queryKey: ["repositories"],
-    queryFn: () => invoke<Repository[]>("list_repositories"),
-  });
-
-  const mcpServersQuery = useQuery({
-    queryKey: ["mcp-servers"],
-    queryFn: () => invoke<McpServerInfo[]>("mcp_list_servers"),
-  });
+  const repositoriesQuery = useQuery(repositoryQueries.list());
+  const mcpServersQuery = useQuery(mcpServerQueries.list());
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => invoke("delete_repository", { id }),
+    mutationFn: deleteRepository,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["repositories"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.repositories.all });
       setDeleteConfirm({ isOpen: false, repositoryId: null, repositoryName: "" });
     },
     onError: (error) => {
@@ -103,7 +101,7 @@ function RepositoriesPage() {
           mcpServers={mcpServersQuery.data ?? []}
           onSuccess={() => {
             setShowForm(false);
-            queryClient.invalidateQueries({ queryKey: ["repositories"] });
+            queryClient.invalidateQueries({ queryKey: queryKeys.repositories.all });
           }}
         />
       )}
@@ -237,15 +235,10 @@ function RepositoryForm({ mcpServers, onSuccess }: RepositoryFormProps) {
   // MCP server creation mutation
   const createMcpMutation = useMutation({
     mutationFn: (request: CreateMcpRunnerRequest) =>
-      invoke<McpServerInfo>("mcp_create_runner", {
-        platform: request.platform,
-        name: request.name,
-        url: request.url,
-        token: request.token,
-      }),
+      createMcpRunner(request.platform, request.name, request.url, request.token),
     onSuccess: (newServer) => {
       // Refresh MCP server list
-      queryClient.invalidateQueries({ queryKey: ["mcp-servers"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.mcpServers.all });
       // Select the newly created server
       setMcpSelection(newServer.name);
       setFormData((prev) => ({ ...prev, mcp_server_name: newServer.name }));
@@ -260,8 +253,7 @@ function RepositoryForm({ mcpServers, onSuccess }: RepositoryFormProps) {
   });
 
   const createMutation = useMutation({
-    mutationFn: (request: CreateRepositoryRequest) =>
-      invoke<Repository>("create_repository", { request }),
+    mutationFn: createRepository,
     onSuccess: () => {
       onSuccess();
     },

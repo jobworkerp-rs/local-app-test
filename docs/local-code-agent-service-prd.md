@@ -66,20 +66,26 @@ GitHub/Gitea MCPサーバーは、**サーバー起動時にトークンを設�
 - 柔軟な運用が可能、マルチアカウント運用に適する
 
 **動的登録時のRunnerService.Create引数**:
-```
+```text
 CreateRunnerRequest {
   name: "github-personal",        // ランナー名（ユニーク）
   description: "GitHub Personal", // 説明
   runner_type: MCP_SERVER,        // MCP_SERVER または PLUGIN
-  definition: """                 // TOML形式の設定文字列
+  definition: """                 // TOML形式の設定文字列（Docker実行形式）
+    [[server]]
     name = "github-personal"
     transport = "stdio"
-    command = "npx"
-    args = ["-y", "@modelcontextprotocol/server-github"]
+    command = "docker"
+    # バージョンタグまたはダイジェストでイメージをピン留めすることを推奨
+    # 例: ghcr.io/github/github-mcp-server:v1.0.0 または @sha256:...
+    args = ["run", "-i", "--rm", "--pull=always", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server:latest"]
+    # 警告: 実際のトークンをコミットしないこと。環境変数や secrets 管理を使用すること
     envs = { GITHUB_PERSONAL_ACCESS_TOKEN = "ghp_xxxx" }
   """
 }
 ```
+
+> **注記**: Docker実行形式を推奨。環境依存性が少なく、Node.jsのインストールが不要。
 
 ---
 

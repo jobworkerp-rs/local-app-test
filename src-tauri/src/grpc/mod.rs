@@ -1,12 +1,6 @@
-#[allow(clippy::doc_overindented_list_items, clippy::doc_lazy_continuation)]
-pub mod data {
-    include!("generated/jobworkerp.data.rs");
-}
-
-#[allow(clippy::doc_overindented_list_items, clippy::doc_lazy_continuation)]
-pub mod service {
-    include!("generated/jobworkerp.service.rs");
-}
+// Re-export proto types from jobworkerp-client crate
+pub use jobworkerp_client::jobworkerp::data;
+pub use jobworkerp_client::jobworkerp::service;
 
 pub mod client;
 

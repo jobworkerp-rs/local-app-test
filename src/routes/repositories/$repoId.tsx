@@ -1,7 +1,7 @@
 import { createFileRoute, Link, Outlet, useMatch } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { invoke } from "@tauri-apps/api/core";
-import { type Repository, type Issue, type PullRequest } from "@/types/models";
+import { ExternalLink } from "@/components/ExternalLink";
+import { repositoryQueries, issueQueries, pullQueries } from "@/lib/query";
 
 /**
  * Format a date string safely, returning fallback for invalid dates
@@ -58,29 +58,17 @@ function RepositoryDetailPage({ repoId }: RepositoryDetailPageProps) {
   const isValidRepoId = Number.isSafeInteger(numericRepoId) && numericRepoId > 0;
 
   const repositoryQuery = useQuery({
-    queryKey: ["repository", numericRepoId],
-    queryFn: () =>
-      invoke<Repository>("get_repository", { repository_id: numericRepoId }),
+    ...repositoryQueries.detail(numericRepoId),
     enabled: isValidRepoId,
   });
 
   const issuesQuery = useQuery({
-    queryKey: ["issues", numericRepoId, "open"],
-    queryFn: () =>
-      invoke<Issue[]>("list_issues", {
-        repository_id: numericRepoId,
-        state: "open",
-      }),
+    ...issueQueries.list(numericRepoId, "open"),
     enabled: isValidRepoId && !!repositoryQuery.data,
   });
 
   const pullsQuery = useQuery({
-    queryKey: ["pulls", numericRepoId, "open"],
-    queryFn: () =>
-      invoke<PullRequest[]>("list_pulls", {
-        repository_id: numericRepoId,
-        state: "open",
-      }),
+    ...pullQueries.list(numericRepoId, "open"),
     enabled: isValidRepoId && !!repositoryQuery.data,
   });
 
@@ -165,14 +153,12 @@ function RepositoryDetailPage({ repoId }: RepositoryDetailPageProps) {
               <div>
                 <dt className="text-sm text-gray-500 dark:text-gray-400">URL</dt>
                 <dd className="font-medium">
-                  <a
+                  <ExternalLink
                     href={repo.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
                     className="text-blue-600 dark:text-blue-400 hover:underline"
                   >
                     {repo.url}
-                  </a>
+                  </ExternalLink>
                 </dd>
               </div>
               {repo.local_path && (
@@ -243,14 +229,12 @@ function RepositoryDetailPage({ repoId }: RepositoryDetailPageProps) {
           <div className="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg p-6">
             <h2 className="text-xl font-semibold mb-4">Actions</h2>
             <div className="space-y-3">
-              <a
+              <ExternalLink
                 href={repo.url}
-                target="_blank"
-                rel="noopener noreferrer"
                 className="block w-full px-4 py-2 text-center border border-slate-300 dark:border-slate-600 rounded hover:bg-gray-50 dark:hover:bg-slate-700"
               >
                 View on {repo.platform}
-              </a>
+              </ExternalLink>
               <Link
                 to="/repositories/$repoId/issues"
                 params={{ repoId: String(repo.id) }}

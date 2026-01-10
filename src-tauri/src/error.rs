@@ -61,18 +61,24 @@ impl Serialize for AppError {
     where
         S: serde::Serializer,
     {
-        // Generalize error messages to prevent information leakage
+        // In debug mode, return detailed error messages for debugging
+        #[cfg(debug_assertions)]
+        let user_message = self.to_string();
+
+        // In release mode, generalize error messages to prevent information leakage
+        #[cfg(not(debug_assertions))]
         let user_message = match self {
-            AppError::Database(_) => "Database error occurred",
-            AppError::Grpc(_) => "Backend communication failed",
-            AppError::Crypto(_) => "Encryption error occurred",
-            AppError::Io(_) => "File operation failed",
-            AppError::InvalidInput(msg) => msg.as_str(),
-            AppError::NotFound(msg) => msg.as_str(),
-            AppError::Config(_) => "Configuration error",
-            AppError::Internal(_) => "Internal error occurred",
+            AppError::Database(_) => "Database error occurred".to_string(),
+            AppError::Grpc(_) => "Backend communication failed".to_string(),
+            AppError::Crypto(_) => "Encryption error occurred".to_string(),
+            AppError::Io(_) => "File operation failed".to_string(),
+            AppError::InvalidInput(msg) => msg.clone(),
+            AppError::NotFound(msg) => msg.clone(),
+            AppError::Config(_) => "Configuration error".to_string(),
+            AppError::Internal(_) => "Internal error occurred".to_string(),
         };
-        serializer.serialize_str(user_message)
+
+        serializer.serialize_str(&user_message)
     }
 }
 

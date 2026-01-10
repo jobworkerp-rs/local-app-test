@@ -1,8 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { invoke } from "@tauri-apps/api/core";
 import { useState } from "react";
-import { type Repository, type Issue, type PullRequest } from "@/types/models";
+import { type Issue } from "@/types/models";
+import { ExternalLink } from "@/components/ExternalLink";
+import { repositoryQueries, issueQueries, pullQueries } from "@/lib/query";
 
 /**
  * Format a date string safely, returning fallback for invalid dates
@@ -27,19 +28,12 @@ function RepositoryIssuesPage() {
   const [stateFilter, setStateFilter] = useState<IssueState>("open");
 
   const repositoryQuery = useQuery({
-    queryKey: ["repository", numericRepoId],
-    queryFn: () =>
-      invoke<Repository>("get_repository", { repository_id: numericRepoId }),
+    ...repositoryQueries.detail(numericRepoId),
     enabled: isValidRepoId,
   });
 
   const issuesQuery = useQuery({
-    queryKey: ["issues", numericRepoId, stateFilter],
-    queryFn: () =>
-      invoke<Issue[]>("list_issues", {
-        repository_id: numericRepoId,
-        state: stateFilter,
-      }),
+    ...issueQueries.list(numericRepoId, stateFilter),
     enabled: isValidRepoId && repositoryQuery.isSuccess,
   });
 
@@ -137,15 +131,7 @@ interface IssueCardProps {
 }
 
 function IssueCard({ issue, repositoryId }: IssueCardProps) {
-  const relatedPrsQuery = useQuery({
-    queryKey: ["related-prs", repositoryId, issue.number],
-    queryFn: () =>
-      invoke<PullRequest[]>("find_related_prs", {
-        repository_id: repositoryId,
-        issue_number: issue.number,
-      }),
-    staleTime: 60000, // Cache for 1 minute
-  });
+  const relatedPrsQuery = useQuery(pullQueries.related(repositoryId, issue.number));
 
   // Only use data when query succeeded to avoid misclassifying loading/error as "0 PRs"
   const relatedPrs = relatedPrsQuery.isSuccess ? relatedPrsQuery.data : [];
@@ -181,14 +167,12 @@ function IssueCard({ issue, repositoryId }: IssueCardProps) {
           </div>
 
           <h3 className="text-lg font-semibold">
-            <a
+            <ExternalLink
               href={issue.html_url}
-              target="_blank"
-              rel="noopener noreferrer"
               className="hover:text-blue-600 dark:hover:text-blue-400"
             >
               {issue.title}
-            </a>
+            </ExternalLink>
           </h3>
 
           {issue.labels.length > 0 && (
@@ -214,11 +198,9 @@ function IssueCard({ issue, repositoryId }: IssueCardProps) {
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Related PRs:</p>
               <div className="flex flex-wrap gap-2">
                 {relatedPrs.map((pr) => (
-                  <a
+                  <ExternalLink
                     key={pr.number}
                     href={pr.html_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
                     className={`text-sm px-2 py-1 rounded ${
                       pr.merged
                         ? "bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300"
@@ -228,7 +210,7 @@ function IssueCard({ issue, repositoryId }: IssueCardProps) {
                     }`}
                   >
                     #{pr.number} {pr.merged ? "(merged)" : `(${pr.state})`}
-                  </a>
+                  </ExternalLink>
                 ))}
               </div>
             </div>
@@ -236,14 +218,12 @@ function IssueCard({ issue, repositoryId }: IssueCardProps) {
         </div>
 
         <div className="flex flex-col gap-2 ml-4">
-          <a
+          <ExternalLink
             href={issue.html_url}
-            target="_blank"
-            rel="noopener noreferrer"
             className="px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded hover:bg-gray-50 dark:hover:bg-slate-700"
           >
             View
-          </a>
+          </ExternalLink>
           {issue.state === "open" && relatedPrsQuery.isSuccess && relatedPrs.length === 0 && (
             <button
               type="button"

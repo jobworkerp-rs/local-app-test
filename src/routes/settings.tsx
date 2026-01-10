@@ -1,38 +1,19 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { invoke } from "@tauri-apps/api/core";
 import { useState, useEffect, type FormEvent } from "react";
+import { settingsQueries, queryKeys } from "@/lib/query";
+import { updateAppSettings, type UpdateAppSettingsRequest } from "@/lib/tauri/commands";
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
 });
 
-interface AppSettings {
-  id: number;
-  worktree_base_path: string;
-  default_base_branch: string;
-  agent_timeout_minutes: number;
-  sync_interval_minutes: number;
-  created_at: string;
-  updated_at: string;
-}
-
-interface UpdateSettingsRequest {
-  worktree_base_path?: string;
-  default_base_branch?: string;
-  agent_timeout_minutes?: number;
-  sync_interval_minutes?: number;
-}
-
 function SettingsPage() {
   const queryClient = useQueryClient();
 
-  const settingsQuery = useQuery({
-    queryKey: ["app-settings"],
-    queryFn: () => invoke<AppSettings>("get_app_settings"),
-  });
+  const settingsQuery = useQuery(settingsQueries.app());
 
-  const [formData, setFormData] = useState<UpdateSettingsRequest>({});
+  const [formData, setFormData] = useState<UpdateAppSettingsRequest>({});
   const [isFormDirty, setIsFormDirty] = useState(false);
 
   useEffect(() => {
@@ -48,11 +29,10 @@ function SettingsPage() {
   }, [settingsQuery.data, isFormDirty]);
 
   const updateMutation = useMutation({
-    mutationFn: (request: UpdateSettingsRequest) =>
-      invoke<AppSettings>("update_app_settings", { request }),
+    mutationFn: updateAppSettings,
     onSuccess: () => {
       setIsFormDirty(false);
-      queryClient.invalidateQueries({ queryKey: ["app-settings"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.all });
     },
   });
 
@@ -62,9 +42,9 @@ function SettingsPage() {
   };
 
   // Helper to update form and mark as dirty
-  const updateFormField = <K extends keyof UpdateSettingsRequest>(
+  const updateFormField = <K extends keyof UpdateAppSettingsRequest>(
     field: K,
-    value: UpdateSettingsRequest[K]
+    value: UpdateAppSettingsRequest[K]
   ) => {
     setFormData({ ...formData, [field]: value });
     setIsFormDirty(true);
