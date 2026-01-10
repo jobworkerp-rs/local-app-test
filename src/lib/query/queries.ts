@@ -141,6 +141,9 @@ export const pullQueries = {
 // ============================================================================
 
 export const jobQueries = {
+  // NOTE: repositoryId is kept in the key signature for future filtering support,
+  // but currently listJobs only filters by status. When repositoryId filtering
+  // is implemented, update queryFn to pass it to listJobs.
   list: (repositoryId?: number | null, status?: string | null) =>
     queryOptions({
       queryKey: queryKeys.jobs.list(repositoryId, status),

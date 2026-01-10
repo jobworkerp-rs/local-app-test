@@ -151,8 +151,8 @@ GitHub/Gitea MCPサーバーは**サーバー起動時にトークンを設定**
 > **実装要件**: 両モードとも実装必須。ユーザーは運用状況に応じてどちらのモードも使用可能。
 
 **参考リンク**:
-- GitHub MCP Server: https://github.com/github/github-mcp-server
-- Gitea MCP Server: https://gitea.com/gitea/gitea-mcp (Docker image: `docker.gitea.com/gitea-mcp-server`)
+- GitHub MCP Server: <https://github.com/github/github-mcp-server>
+- Gitea MCP Server: <https://gitea.com/gitea/gitea-mcp> (Docker image: `docker.gitea.com/gitea-mcp-server`)
 
 **HOST環境変数の違い**:
 
@@ -744,8 +744,8 @@ output:
 > **注意**: jq式では`//`演算子（alternative operator）を使用して、最初に存在するフィールドを取得できる。
 
 **参考リンク**:
-- GitHub MCP Server: https://github.com/github/github-mcp-server
-- Gitea MCP Server: https://gitea.com/gitea/gitea-mcp
+- GitHub MCP Server: <https://github.com/github/github-mcp-server>
+- Gitea MCP Server: <https://gitea.com/gitea/gitea-mcp>
 
 ---
 

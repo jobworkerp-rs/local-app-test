@@ -14,18 +14,16 @@ import {
   type StartAgentRequest,
 } from "@/lib/tauri/commands";
 import { listenJobStatus } from "@/lib/tauri/events";
+import { queryKeys } from "@/lib/query/keys";
 import type { AgentJob } from "@/types/models";
 
-// ============================================================================
-// Query Keys
-// ============================================================================
-
+// Re-export queryKeys.jobs as jobKeys for backward compatibility
 export const jobKeys = {
-  all: ["jobs"] as const,
-  lists: () => [...jobKeys.all, "list"] as const,
-  list: (status?: string) => [...jobKeys.lists(), { status }] as const,
-  details: () => [...jobKeys.all, "detail"] as const,
-  detail: (id: number) => [...jobKeys.details(), id] as const,
+  all: queryKeys.jobs.all,
+  lists: () => [...queryKeys.jobs.all, "list"] as const,
+  list: (status?: string) => queryKeys.jobs.list(null, status ?? null),
+  details: () => [...queryKeys.jobs.all, "detail"] as const,
+  detail: (id: number) => queryKeys.jobs.detail(id),
 };
 
 // ============================================================================
