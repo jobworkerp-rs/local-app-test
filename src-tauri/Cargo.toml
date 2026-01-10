@@ -45,6 +45,7 @@ hex = "0.4"
 # Utilities
 anyhow = "1"
 chrono = { version = "0.4", features = ["serde"] }
+dotenv = "*"
 futures = "0.3"
 async-trait = "0.1"
 directories = "5"
