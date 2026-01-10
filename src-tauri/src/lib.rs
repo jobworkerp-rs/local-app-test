@@ -1,3 +1,6 @@
+// Allow dead code for modules under development
+#![allow(dead_code)]
+
 mod commands;
 mod crypto;
 mod db;
@@ -5,7 +8,7 @@ mod error;
 mod grpc;
 mod state;
 
-use dotenv::dotenv;
+use dotenvy::dotenv;
 use state::AppState;
 use tauri::Manager;
 

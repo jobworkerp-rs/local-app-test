@@ -690,7 +690,7 @@ export interface CreateMcpRunnerRequest {
 export interface McpServerInfo {
   name: string;
   description: string | null;
-  transport: string;      // "stdio" | "sse"
+  runner_type: string;    // "MCP_SERVER"
 }
 ```
 

@@ -2,6 +2,7 @@ use crate::db::{DbPool, Platform, Repository};
 use crate::error::AppError;
 
 /// Get repository by ID from database
+#[allow(clippy::type_complexity)]
 pub fn get_repository_by_id(db: &DbPool, id: i64) -> Result<Repository, AppError> {
     let conn = db.get().map_err(|e| AppError::Internal(e.to_string()))?;
 

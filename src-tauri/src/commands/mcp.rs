@@ -5,6 +5,50 @@ use url::Url;
 use crate::error::AppError;
 use crate::grpc::{JobworkerpClient, McpServerInfo};
 
+/// Validate and escape a string for TOML value.
+/// Rejects strings containing characters that could break TOML parsing.
+fn validate_toml_value(value: &str, field_name: &str) -> Result<(), AppError> {
+    // Reject control characters, quotes, and backslashes that could cause TOML injection
+    if value.contains('"')
+        || value.contains('\\')
+        || value.contains('\n')
+        || value.contains('\r')
+        || value.contains('\t')
+        || value.contains('\0')
+    {
+        return Err(AppError::InvalidInput(format!(
+            "{} contains invalid characters (quotes, backslashes, or control characters are not allowed)",
+            field_name
+        )));
+    }
+    Ok(())
+}
+
+/// Validate runner name format.
+/// Only allows alphanumeric characters, hyphens, and underscores.
+fn validate_runner_name(name: &str) -> Result<(), AppError> {
+    if name.is_empty() {
+        return Err(AppError::InvalidInput(
+            "Runner name cannot be empty".to_string(),
+        ));
+    }
+    if name.len() > 64 {
+        return Err(AppError::InvalidInput(
+            "Runner name must be 64 characters or less".to_string(),
+        ));
+    }
+    if !name
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+    {
+        return Err(AppError::InvalidInput(
+            "Runner name can only contain alphanumeric characters, hyphens, and underscores"
+                .to_string(),
+        ));
+    }
+    Ok(())
+}
+
 /// List configured MCP servers from jobworkerp-rs
 #[tauri::command]
 pub async fn mcp_list_servers(
@@ -36,6 +80,19 @@ pub async fn mcp_create_runner(
     url: String,
     token: String,
 ) -> Result<McpServerInfo, AppError> {
+    // Validate inputs to prevent TOML injection
+    validate_runner_name(&name)?;
+    validate_toml_value(&token, "Token")?;
+    validate_toml_value(&url, "URL")?;
+
+    // Check if runner with this name already exists
+    if let Some(_existing) = grpc.find_runner_by_name(&name).await? {
+        return Err(AppError::InvalidInput(format!(
+            "Runner with name '{}' already exists",
+            name
+        )));
+    }
+
     // Generate TOML definition based on platform
     let definition = match platform.as_str() {
         "GitHub" => github_mcp_toml(&name, &url, &token)?,
@@ -103,10 +160,11 @@ fn github_mcp_toml(name: &str, url: &str, token: &str) -> Result<String, AppErro
         .join(",\n");
 
     // Build envs inline table
+    // Note: GITHUB_HOST should be just the hostname, not the full URL
     let envs = if is_ghes {
         format!(
             "{{ GITHUB_PERSONAL_ACCESS_TOKEN = \"{}\", GITHUB_HOST = \"{}\" }}",
-            token, url
+            token, host
         )
     } else {
         format!("{{ GITHUB_PERSONAL_ACCESS_TOKEN = \"{}\" }}", token)
@@ -160,7 +218,14 @@ fn gitea_mcp_toml(name: &str, url: &str, token: &str) -> Result<String, AppError
         "--rm".to_string(),
         "-e".to_string(),
         "GITEA_ACCESS_TOKEN".to_string(),
+        "-e".to_string(),
+        "GITEA_HOST".to_string(),
     ];
+
+    if is_insecure {
+        args.push("-e".to_string());
+        args.push("GITEA_INSECURE".to_string());
+    }
 
     args.push("docker.gitea.com/gitea-mcp-server".to_string());
 

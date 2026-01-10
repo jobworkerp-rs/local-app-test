@@ -102,15 +102,24 @@ fn parse_issue(value: &serde_json::Value) -> Option<Issue> {
 /// Extract issues from MCP result
 /// MCP results typically have a "content" array with text content
 fn extract_issues_from_result(result: &serde_json::Value) -> Result<Vec<Issue>, AppError> {
+    tracing::debug!("extract_issues_from_result: {:?}", result);
+
     // First, try to extract from MCP content structure
     if let Some(content) = result.get("content").and_then(|c| c.as_array()) {
+        tracing::debug!("Found content array with {} items", content.len());
         for item in content {
             if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
+                tracing::debug!("Found text content: {}", &text[..text.len().min(500)]);
                 // Parse the text as JSON
                 if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(text) {
                     if let Some(arr) = parsed.as_array() {
+                        tracing::debug!("Parsed as array with {} items", arr.len());
                         return Ok(arr.iter().filter_map(parse_issue).collect());
+                    } else {
+                        tracing::debug!("Parsed JSON is not an array: {:?}", parsed);
                     }
+                } else {
+                    tracing::debug!("Failed to parse text as JSON");
                 }
             }
         }
@@ -118,16 +127,19 @@ fn extract_issues_from_result(result: &serde_json::Value) -> Result<Vec<Issue>, 
 
     // Direct array format
     if let Some(arr) = result.as_array() {
+        tracing::debug!("Result is direct array with {} items", arr.len());
         return Ok(arr.iter().filter_map(parse_issue).collect());
     }
 
     // Single issue
     if result.get("number").is_some() {
+        tracing::debug!("Result is single issue");
         if let Some(issue) = parse_issue(result) {
             return Ok(vec![issue]);
         }
     }
 
+    tracing::debug!("No issues found in result");
     Ok(vec![])
 }
 
@@ -141,13 +153,24 @@ pub async fn list_issues(
 ) -> Result<Vec<Issue>, AppError> {
     let repo = get_repository_by_id(&db, repository_id)?;
     let tool_name = get_list_issues_tool(repo.platform);
-    let state_value = normalize_issue_state(&state.unwrap_or_else(|| "open".to_string()), repo.platform);
+    let state_value =
+        normalize_issue_state(&state.unwrap_or_else(|| "open".to_string()), repo.platform);
 
-    let args = serde_json::json!({
-        "owner": repo.owner,
-        "repo": repo.repo_name,
-        "state": state_value,
-    });
+    // GitHub MCP uses "states" (array), Gitea uses "state" (string)
+    let args = match repo.platform {
+        Platform::GitHub => serde_json::json!({
+            "owner": repo.owner,
+            "repo": repo.repo_name,
+            "states": [state_value],
+        }),
+        Platform::Gitea => serde_json::json!({
+            "owner": repo.owner,
+            "repo": repo.repo_name,
+            "state": state_value,
+        }),
+    };
+
+    tracing::debug!("list_issues args: {:?}", args);
 
     let result = grpc
         .call_mcp_tool(&repo.mcp_server_name, tool_name, &args)

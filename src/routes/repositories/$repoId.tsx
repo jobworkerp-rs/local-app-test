@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useMatch } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { type Repository, type Issue, type PullRequest } from "@/types/models";
@@ -24,11 +24,36 @@ function formatDateTime(dateStr: string | null | undefined, fallback = "-"): str
 }
 
 export const Route = createFileRoute("/repositories/$repoId")({
-  component: RepositoryDetailPage,
+  component: RepositoryDetailLayout,
 });
 
-function RepositoryDetailPage() {
+function RepositoryDetailLayout() {
   const { repoId } = Route.useParams();
+
+  // Check if we're on a child route (issues or pulls)
+  const issuesMatch = useMatch({
+    from: "/repositories/$repoId/issues",
+    shouldThrow: false,
+  });
+  const pullsMatch = useMatch({
+    from: "/repositories/$repoId/pulls",
+    shouldThrow: false,
+  });
+
+  // If we're on a child route, render the child via Outlet
+  if (issuesMatch || pullsMatch) {
+    return <Outlet />;
+  }
+
+  // Otherwise render the repository detail page
+  return <RepositoryDetailPage repoId={repoId} />;
+}
+
+interface RepositoryDetailPageProps {
+  repoId: string;
+}
+
+function RepositoryDetailPage({ repoId }: RepositoryDetailPageProps) {
   const numericRepoId = Number(repoId);
   const isValidRepoId = Number.isSafeInteger(numericRepoId) && numericRepoId > 0;
 

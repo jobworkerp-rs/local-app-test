@@ -226,7 +226,11 @@ impl JobworkerpClient {
         tool_name: &str,
         args: &serde_json::Value,
     ) -> Result<serde_json::Value, AppError> {
-        tracing::debug!("call_mcp_tool: server='{}', tool='{}'", server_name, tool_name);
+        tracing::debug!(
+            "call_mcp_tool: server='{}', tool='{}'",
+            server_name,
+            tool_name
+        );
 
         // Ensure worker exists (auto-create if needed)
         let worker = match self.ensure_mcp_worker(server_name).await {
@@ -247,7 +251,11 @@ impl JobworkerpClient {
         tracing::debug!(
             "Using worker_id={} (name='{}') for enqueue",
             worker_id.value,
-            worker.data.as_ref().map(|d| d.name.as_str()).unwrap_or(server_name)
+            worker
+                .data
+                .as_ref()
+                .map(|d| d.name.as_str())
+                .unwrap_or(server_name)
         );
 
         let mut client = self.job_client().await;
@@ -423,15 +431,16 @@ impl JobworkerpClient {
             return Ok(worker);
         }
 
-        tracing::debug!(
-            "Worker '{}' not found, looking for runner",
-            mcp_server_name
-        );
+        tracing::debug!("Worker '{}' not found, looking for runner", mcp_server_name);
 
         // 2. Find the runner (must exist)
         let runner = self.find_runner_by_name(mcp_server_name).await?;
 
-        tracing::debug!("Runner lookup result for '{}': {:?}", mcp_server_name, runner.is_some());
+        tracing::debug!(
+            "Runner lookup result for '{}': {:?}",
+            mcp_server_name,
+            runner.is_some()
+        );
 
         let runner = runner.ok_or_else(|| {
             tracing::error!(
@@ -479,7 +488,11 @@ impl JobworkerpClient {
 
         let worker_id = match self.create_worker(worker_data.clone()).await {
             Ok(id) => {
-                tracing::info!("Successfully created worker '{}' with ID {}", mcp_server_name, id);
+                tracing::info!(
+                    "Successfully created worker '{}' with ID {}",
+                    mcp_server_name,
+                    id
+                );
                 id
             }
             Err(e) => {
