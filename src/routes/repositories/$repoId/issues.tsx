@@ -35,11 +35,20 @@ function RepositoryIssuesPage() {
 
   const issuesQuery = useQuery({
     queryKey: ["issues", numericRepoId, stateFilter],
-    queryFn: () =>
-      invoke<Issue[]>("list_issues", {
-        repositoryId: numericRepoId,
-        state: stateFilter,
-      }),
+    queryFn: async () => {
+      console.log("Fetching issues for repo:", numericRepoId, "state:", stateFilter);
+      try {
+        const result = await invoke<Issue[]>("list_issues", {
+          repositoryId: numericRepoId,
+          state: stateFilter,
+        });
+        console.log("Issues result:", result);
+        return result;
+      } catch (err) {
+        console.error("Issues fetch error:", err);
+        throw err;
+      }
+    },
     enabled: isValidRepoId && repositoryQuery.isSuccess,
   });
 
