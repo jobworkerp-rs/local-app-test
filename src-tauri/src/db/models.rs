@@ -170,3 +170,13 @@ pub struct PullRequest {
     pub created_at: String,
     pub updated_at: String,
 }
+
+/// Issue comment from GitHub/Gitea (not persisted to DB)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IssueComment {
+    pub id: i64,
+    pub user: String,
+    pub body: String,
+    pub created_at: String,
+    pub updated_at: String,
+}

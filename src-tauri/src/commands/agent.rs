@@ -15,6 +15,7 @@ pub struct StartAgentRequest {
     pub repository_id: i64,
     pub issue_number: i32,
     pub issue_title: String,
+    pub custom_prompt: Option<String>,
 }
 
 /// Response from starting an agent job
@@ -35,6 +36,8 @@ struct WorkflowInput {
     worktree_base_path: String,
     local_repo_path: String,
     mcp_server: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    custom_prompt: Option<String>,
 }
 
 /// Workflow run arguments for jobworkerp-rs
@@ -107,6 +110,7 @@ pub async fn agent_start(
         worktree_base_path: settings.worktree_base_path.clone(),
         local_repo_path: local_repo_path.clone(),
         mcp_server: mcp_server.to_string(),
+        custom_prompt: request.custom_prompt.clone(),
     };
 
     let workflow_args = WorkflowRunArgs {

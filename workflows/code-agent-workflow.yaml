@@ -37,6 +37,9 @@ input:
         mcp_server:
           type: string
           description: "MCP server name (github or gitea)"
+        custom_prompt:
+          type: string
+          description: "Optional custom prompt/instructions from user"
       required:
         - owner
         - repo
@@ -119,6 +122,11 @@ do:
                 {% endfor %}
                 {% endif %}
 
+                {% if custom_prompt %}
+                ## Additional Instructions from User
+                {{ custom_prompt }}
+
+                {% endif %}
                 ## Instructions
                 - Create or modify files as needed to resolve the issue
                 - Run tests to verify the changes work correctly

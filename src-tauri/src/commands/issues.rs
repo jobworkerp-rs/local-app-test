@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use tauri::State;
 
-use crate::db::{get_repository_by_id, DbPool, Issue, Platform};
+use crate::db::{get_repository_by_id, DbPool, Issue, IssueComment, Platform};
 use crate::error::AppError;
 use crate::grpc::JobworkerpClient;
 
@@ -18,6 +18,14 @@ fn get_read_issue_tool(platform: Platform) -> &'static str {
     match platform {
         Platform::GitHub => "issue_read",
         Platform::Gitea => "get_issue_by_index",
+    }
+}
+
+/// Get the MCP tool name for listing issue comments based on platform
+fn get_list_issue_comments_tool(platform: Platform) -> &'static str {
+    match platform {
+        Platform::GitHub => "list_issue_comments",
+        Platform::Gitea => "get_issue_comments",
     }
 }
 
@@ -278,4 +286,105 @@ pub async fn get_issue(
     // Direct format
     parse_issue(&result, &repo.url, repo.platform)
         .ok_or_else(|| AppError::NotFound(format!("Issue #{} not found", issue_number)))
+}
+
+/// Parse a single comment from MCP result JSON
+fn parse_comment(value: &serde_json::Value) -> Option<IssueComment> {
+    let id = value.get("id")?.as_i64()?;
+    let body = value.get("body").and_then(|v| v.as_str())?.to_string();
+
+    let user = value
+        .get("user")
+        .and_then(|u| {
+            u.as_str()
+                .map(String::from)
+                .or_else(|| u.get("login").and_then(|l| l.as_str()).map(String::from))
+        })
+        .unwrap_or_default();
+
+    let created_at = value
+        .get("created_at")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    let updated_at = value
+        .get("updated_at")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    Some(IssueComment {
+        id,
+        user,
+        body,
+        created_at,
+        updated_at,
+    })
+}
+
+/// Extract comments from MCP result
+fn extract_comments_from_result(result: &serde_json::Value) -> Result<Vec<IssueComment>, AppError> {
+    tracing::debug!("extract_comments_from_result: {:?}", result);
+
+    // GitHub MCP format: {"comments": [...]}
+    if let Some(comments_arr) = result.get("comments").and_then(|c| c.as_array()) {
+        tracing::debug!("Found 'comments' field with {} items", comments_arr.len());
+        return Ok(comments_arr.iter().filter_map(parse_comment).collect());
+    }
+
+    // MCP content structure: {"content": [{"text": "..."}]}
+    if let Some(content) = result.get("content").and_then(|c| c.as_array()) {
+        for item in content {
+            let text_str = item.get("text").and_then(|t| {
+                t.get("text")
+                    .and_then(|inner| inner.as_str())
+                    .or_else(|| t.as_str())
+            });
+
+            if let Some(text) = text_str {
+                if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(text) {
+                    if let Some(comments_arr) = parsed.get("comments").and_then(|c| c.as_array()) {
+                        return Ok(comments_arr.iter().filter_map(parse_comment).collect());
+                    }
+                    if let Some(arr) = parsed.as_array() {
+                        return Ok(arr.iter().filter_map(parse_comment).collect());
+                    }
+                }
+            }
+        }
+    }
+
+    // Direct array format
+    if let Some(arr) = result.as_array() {
+        return Ok(arr.iter().filter_map(parse_comment).collect());
+    }
+
+    Ok(vec![])
+}
+
+/// Get comments for a specific issue
+#[tauri::command]
+pub async fn get_issue_comments(
+    db: State<'_, DbPool>,
+    grpc: State<'_, Arc<JobworkerpClient>>,
+    repository_id: i64,
+    issue_number: i32,
+) -> Result<Vec<IssueComment>, AppError> {
+    let repo = get_repository_by_id(&db, repository_id)?;
+    let tool_name = get_list_issue_comments_tool(repo.platform);
+
+    let args = serde_json::json!({
+        "owner": repo.owner,
+        "repo": repo.repo_name,
+        "issue_number": issue_number,
+    });
+
+    tracing::debug!("get_issue_comments args: {:?}", args);
+
+    let result = grpc
+        .call_mcp_tool(&repo.mcp_server_name, tool_name, &args)
+        .await?;
+
+    extract_comments_from_result(&result)
 }

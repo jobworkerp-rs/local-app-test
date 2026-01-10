@@ -1,10 +1,9 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { type Issue } from "@/types/models";
 import { ExternalLink } from "@/components/ExternalLink";
 import { repositoryQueries, issueQueries, pullQueries } from "@/lib/query";
-import { useStartAgent } from "@/hooks";
 
 /**
  * Format a date string safely, returning fallback for invalid dates
@@ -118,6 +117,7 @@ function RepositoryIssuesPage() {
               key={issue.number}
               issue={issue}
               repositoryId={numericRepoId}
+              repoId={repoId}
             />
           ))}
         </div>
@@ -129,31 +129,16 @@ function RepositoryIssuesPage() {
 interface IssueCardProps {
   issue: Issue;
   repositoryId: number;
+  repoId: string;
 }
 
-function IssueCard({ issue, repositoryId }: IssueCardProps) {
-  const navigate = useNavigate();
-  const startAgentMutation = useStartAgent();
+function IssueCard({ issue, repositoryId, repoId }: IssueCardProps) {
   const relatedPrsQuery = useQuery(pullQueries.related(repositoryId, issue.number));
 
-  // Only use data when query succeeded to avoid misclassifying loading/error as "0 PRs"
   const relatedPrs = relatedPrsQuery.isSuccess ? relatedPrsQuery.data : [];
   const hasOpenPr = relatedPrsQuery.isSuccess && relatedPrs.some((pr) => pr.state === "open");
   const hasMergedPr = relatedPrsQuery.isSuccess && relatedPrs.some((pr) => pr.merged);
   const hasRelatedPrs = relatedPrsQuery.isSuccess && relatedPrs.length > 0;
-
-  const handleRunAgent = async () => {
-    try {
-      const response = await startAgentMutation.mutateAsync({
-        repository_id: repositoryId,
-        issue_number: issue.number,
-        issue_title: issue.title,
-      });
-      navigate({ to: "/jobs/$jobId", params: { jobId: String(response.job_id) } });
-    } catch (error) {
-      console.error("Failed to start agent:", error);
-    }
-  };
 
   return (
     <div className="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg p-4 hover:shadow-md transition-shadow">
@@ -183,12 +168,13 @@ function IssueCard({ issue, repositoryId }: IssueCardProps) {
           </div>
 
           <h3 className="text-lg font-semibold">
-            <ExternalLink
-              href={issue.html_url}
+            <Link
+              to="/repositories/$repoId/issues/$issueNumber"
+              params={{ repoId, issueNumber: String(issue.number) }}
               className="hover:text-blue-600 dark:hover:text-blue-400"
             >
               {issue.title}
-            </ExternalLink>
+            </Link>
           </h3>
 
           {issue.labels.length > 0 && (
@@ -238,18 +224,15 @@ function IssueCard({ issue, repositoryId }: IssueCardProps) {
             href={issue.html_url}
             className="px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded hover:bg-gray-50 dark:hover:bg-slate-700"
           >
-            View
+            Open in Browser
           </ExternalLink>
-          {issue.state === "open" && relatedPrsQuery.isSuccess && relatedPrs.length === 0 && (
-            <button
-              type="button"
-              onClick={handleRunAgent}
-              disabled={startAgentMutation.isPending}
-              className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {startAgentMutation.isPending ? "Starting..." : "Run Agent"}
-            </button>
-          )}
+          <Link
+            to="/repositories/$repoId/issues/$issueNumber"
+            params={{ repoId, issueNumber: String(issue.number) }}
+            className="px-3 py-1 text-sm text-center border border-blue-500 text-blue-600 dark:text-blue-400 rounded hover:bg-blue-50 dark:hover:bg-blue-900/30"
+          >
+            View Details
+          </Link>
         </div>
       </div>
     </div>

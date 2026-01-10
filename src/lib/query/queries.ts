@@ -14,6 +14,7 @@ import {
   getRepository,
   listIssues,
   getIssue,
+  getIssueComments,
   listPulls,
   findRelatedPrs,
   listJobs,
@@ -103,6 +104,17 @@ export const issueQueries = {
     queryOptions({
       queryKey: queryKeys.issues.detail(repositoryId, issueNumber),
       queryFn: () => getIssue(repositoryId, issueNumber),
+      enabled:
+        Number.isSafeInteger(repositoryId) &&
+        repositoryId > 0 &&
+        Number.isSafeInteger(issueNumber) &&
+        issueNumber > 0,
+    }),
+
+  comments: (repositoryId: number, issueNumber: number) =>
+    queryOptions({
+      queryKey: queryKeys.issues.comments(repositoryId, issueNumber),
+      queryFn: () => getIssueComments(repositoryId, issueNumber),
       enabled:
         Number.isSafeInteger(repositoryId) &&
         repositoryId > 0 &&

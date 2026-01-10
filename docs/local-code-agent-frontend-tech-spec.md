@@ -713,7 +713,9 @@ local-code-agent/
 │   │   ├── repositories/
 │   │   │   ├── $repoId.tsx       # /repositories/$repoId 詳細
 │   │   │   └── $repoId/
-│   │   │       ├── issues.tsx    # /repositories/$repoId/issues
+│   │   │       ├── issues.tsx    # /repositories/$repoId/issues 一覧
+│   │   │       ├── issues/
+│   │   │       │   └── $issueNumber.tsx  # /repositories/$repoId/issues/$issueNumber 詳細
 │   │   │       └── pulls.tsx     # /repositories/$repoId/pulls
 │   │   ├── jobs/
 │   │   │   ├── index.tsx         # /jobs 一覧
@@ -732,6 +734,8 @@ local-code-agent/
 │   │   │   ├── issue-list.tsx
 │   │   │   ├── issue-card.tsx
 │   │   │   └── related-pr-warning.tsx
+│   │   ├── agent/
+│   │   │   └── run-agent-dialog.tsx  # エージェント実行確認ダイアログ
 │   │   └── jobs/
 │   │       ├── job-status-badge.tsx
 │   │       ├── job-progress.tsx

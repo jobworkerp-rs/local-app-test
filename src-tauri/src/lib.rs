@@ -57,6 +57,7 @@ pub fn run() {
             commands::delete_repository,
             commands::list_issues,
             commands::get_issue,
+            commands::get_issue_comments,
             commands::list_pulls,
             commands::find_related_prs,
             commands::agent_start,

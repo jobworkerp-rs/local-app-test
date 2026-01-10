@@ -169,6 +169,30 @@ export function getIssue(
   });
 }
 
+/**
+ * Issue comment from GitHub/Gitea
+ */
+export interface IssueComment {
+  id: number;
+  user: string;
+  body: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Get comments for a specific issue
+ */
+export function getIssueComments(
+  repositoryId: number,
+  issueNumber: number
+): Promise<IssueComment[]> {
+  return invoke<IssueComment[]>("get_issue_comments", {
+    repositoryId,
+    issueNumber,
+  });
+}
+
 // ============================================================================
 // Pull Request Commands
 // ============================================================================
@@ -225,6 +249,7 @@ export interface StartAgentRequest {
   repository_id: number;
   issue_number: number;
   issue_title: string;
+  custom_prompt?: string;
 }
 
 export interface StartAgentResponse {

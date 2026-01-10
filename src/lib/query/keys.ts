@@ -41,6 +41,8 @@ export const queryKeys = {
       [...queryKeys.issues.all, "list", repositoryId, state ?? "open"] as const,
     detail: (repositoryId: number, issueNumber: number) =>
       [...queryKeys.issues.all, "detail", repositoryId, issueNumber] as const,
+    comments: (repositoryId: number, issueNumber: number) =>
+      [...queryKeys.issues.all, "comments", repositoryId, issueNumber] as const,
   },
 
   // Pull Requests
