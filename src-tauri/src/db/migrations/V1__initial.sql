@@ -7,6 +7,8 @@ CREATE TABLE app_settings (
   default_base_branch TEXT NOT NULL DEFAULT 'main',
   agent_timeout_minutes INTEGER NOT NULL DEFAULT 30,
   sync_interval_minutes INTEGER NOT NULL DEFAULT 10,
+  grpc_server_url TEXT NOT NULL DEFAULT 'http://localhost:9000',
+  locale TEXT NOT NULL DEFAULT 'en',
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

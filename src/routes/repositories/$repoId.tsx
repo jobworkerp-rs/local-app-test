@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useMatch } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { type Repository, type Issue, type PullRequest } from "@/types/models";
@@ -24,11 +24,36 @@ function formatDateTime(dateStr: string | null | undefined, fallback = "-"): str
 }
 
 export const Route = createFileRoute("/repositories/$repoId")({
-  component: RepositoryDetailPage,
+  component: RepositoryDetailLayout,
 });
 
-function RepositoryDetailPage() {
+function RepositoryDetailLayout() {
   const { repoId } = Route.useParams();
+
+  // Check if we're on a child route (issues or pulls)
+  const issuesMatch = useMatch({
+    from: "/repositories/$repoId/issues",
+    shouldThrow: false,
+  });
+  const pullsMatch = useMatch({
+    from: "/repositories/$repoId/pulls",
+    shouldThrow: false,
+  });
+
+  // If we're on a child route, render the child via Outlet
+  if (issuesMatch || pullsMatch) {
+    return <Outlet />;
+  }
+
+  // Otherwise render the repository detail page
+  return <RepositoryDetailPage repoId={repoId} />;
+}
+
+interface RepositoryDetailPageProps {
+  repoId: string;
+}
+
+function RepositoryDetailPage({ repoId }: RepositoryDetailPageProps) {
   const numericRepoId = Number(repoId);
   const isValidRepoId = Number.isSafeInteger(numericRepoId) && numericRepoId > 0;
 
@@ -63,11 +88,11 @@ function RepositoryDetailPage() {
     return (
       <div className="container mx-auto p-8">
         <div className="flex items-center gap-4 mb-6">
-          <Link to="/repositories" className="text-blue-600 hover:underline">
+          <Link to="/repositories" className="text-blue-600 dark:text-blue-400 hover:underline">
             &larr; Back to Repositories
           </Link>
         </div>
-        <p className="text-red-600">Error: Invalid repository ID</p>
+        <p className="text-red-600 dark:text-red-400">Error: Invalid repository ID</p>
       </div>
     );
   }
@@ -75,7 +100,7 @@ function RepositoryDetailPage() {
   if (repositoryQuery.isLoading) {
     return (
       <div className="container mx-auto p-8">
-        <p>Loading repository...</p>
+        <p className="text-slate-600 dark:text-slate-400">Loading repository...</p>
       </div>
     );
   }
@@ -84,11 +109,11 @@ function RepositoryDetailPage() {
     return (
       <div className="container mx-auto p-8">
         <div className="flex items-center gap-4 mb-6">
-          <Link to="/repositories" className="text-blue-600 hover:underline">
+          <Link to="/repositories" className="text-blue-600 dark:text-blue-400 hover:underline">
             &larr; Back to Repositories
           </Link>
         </div>
-        <p className="text-red-600">
+        <p className="text-red-600 dark:text-red-400">
           Error: {String(repositoryQuery.error)}
         </p>
       </div>
@@ -100,11 +125,11 @@ function RepositoryDetailPage() {
     return (
       <div className="container mx-auto p-8">
         <div className="flex items-center gap-4 mb-6">
-          <Link to="/repositories" className="text-blue-600 hover:underline">
+          <Link to="/repositories" className="text-blue-600 dark:text-blue-400 hover:underline">
             &larr; Back to Repositories
           </Link>
         </div>
-        <p className="text-red-600">Repository not found</p>
+        <p className="text-red-600 dark:text-red-400">Repository not found</p>
       </div>
     );
   }
@@ -115,7 +140,7 @@ function RepositoryDetailPage() {
   return (
     <div className="container mx-auto p-8">
       <div className="flex items-center gap-4 mb-6">
-        <Link to="/repositories" className="text-blue-600 hover:underline">
+        <Link to="/repositories" className="text-blue-600 dark:text-blue-400 hover:underline">
           &larr; Back to Repositories
         </Link>
         <h1 className="text-3xl font-bold">
@@ -126,25 +151,25 @@ function RepositoryDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           {/* Repository Info */}
-          <div className="border rounded-lg p-6">
+          <div className="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg p-6">
             <h2 className="text-xl font-semibold mb-4">Repository Details</h2>
             <dl className="grid grid-cols-2 gap-4">
               <div>
-                <dt className="text-sm text-gray-500">Platform</dt>
+                <dt className="text-sm text-gray-500 dark:text-gray-400">Platform</dt>
                 <dd className="font-medium">{repo.platform}</dd>
               </div>
               <div>
-                <dt className="text-sm text-gray-500">MCP Server</dt>
+                <dt className="text-sm text-gray-500 dark:text-gray-400">MCP Server</dt>
                 <dd className="font-medium">{repo.mcp_server_name}</dd>
               </div>
               <div>
-                <dt className="text-sm text-gray-500">URL</dt>
+                <dt className="text-sm text-gray-500 dark:text-gray-400">URL</dt>
                 <dd className="font-medium">
                   <a
                     href={repo.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-600 hover:underline"
+                    className="text-blue-600 dark:text-blue-400 hover:underline"
                   >
                     {repo.url}
                   </a>
@@ -152,7 +177,7 @@ function RepositoryDetailPage() {
               </div>
               {repo.local_path && (
                 <div>
-                  <dt className="text-sm text-gray-500">Local Path</dt>
+                  <dt className="text-sm text-gray-500 dark:text-gray-400">Local Path</dt>
                   <dd className="font-medium font-mono text-sm">
                     {repo.local_path}
                   </dd>
@@ -160,7 +185,7 @@ function RepositoryDetailPage() {
               )}
               {repo.last_synced_at && (
                 <div>
-                  <dt className="text-sm text-gray-500">Last Synced</dt>
+                  <dt className="text-sm text-gray-500 dark:text-gray-400">Last Synced</dt>
                   <dd className="font-medium">
                     {formatDateTime(repo.last_synced_at)}
                   </dd>
@@ -174,18 +199,18 @@ function RepositoryDetailPage() {
             <Link
               to="/repositories/$repoId/issues"
               params={{ repoId: String(repo.id) }}
-              className="border rounded-lg p-6 hover:shadow-md transition-shadow"
+              className="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg p-6 hover:shadow-md transition-shadow"
             >
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-lg font-semibold">Issues</h3>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
                     {issuesQuery.isLoading
                       ? "Loading..."
                       : `${openIssueCount} open`}
                   </p>
                 </div>
-                <span className="text-3xl font-bold text-blue-600">
+                <span className="text-3xl font-bold text-blue-600 dark:text-blue-400">
                   {issuesQuery.isLoading ? "-" : openIssueCount}
                 </span>
               </div>
@@ -194,18 +219,18 @@ function RepositoryDetailPage() {
             <Link
               to="/repositories/$repoId/pulls"
               params={{ repoId: String(repo.id) }}
-              className="border rounded-lg p-6 hover:shadow-md transition-shadow"
+              className="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg p-6 hover:shadow-md transition-shadow"
             >
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-lg font-semibold">Pull Requests</h3>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
                     {pullsQuery.isLoading
                       ? "Loading..."
                       : `${openPullCount} open`}
                   </p>
                 </div>
-                <span className="text-3xl font-bold text-green-600">
+                <span className="text-3xl font-bold text-green-600 dark:text-green-400">
                   {pullsQuery.isLoading ? "-" : openPullCount}
                 </span>
               </div>
@@ -215,14 +240,14 @@ function RepositoryDetailPage() {
 
         {/* Sidebar */}
         <div className="space-y-6">
-          <div className="border rounded-lg p-6">
+          <div className="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg p-6">
             <h2 className="text-xl font-semibold mb-4">Actions</h2>
             <div className="space-y-3">
               <a
                 href={repo.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block w-full px-4 py-2 text-center border rounded hover:bg-gray-50"
+                className="block w-full px-4 py-2 text-center border border-slate-300 dark:border-slate-600 rounded hover:bg-gray-50 dark:hover:bg-slate-700"
               >
                 View on {repo.platform}
               </a>
@@ -236,22 +261,22 @@ function RepositoryDetailPage() {
               <Link
                 to="/repositories/$repoId/pulls"
                 params={{ repoId: String(repo.id) }}
-                className="block w-full px-4 py-2 text-center border border-green-600 text-green-600 rounded hover:bg-green-50"
+                className="block w-full px-4 py-2 text-center border border-green-600 dark:border-green-500 text-green-600 dark:text-green-400 rounded hover:bg-green-50 dark:hover:bg-green-900/30"
               >
                 Browse Pull Requests
               </Link>
             </div>
           </div>
 
-          <div className="border rounded-lg p-6">
+          <div className="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg p-6">
             <h2 className="text-xl font-semibold mb-4">Info</h2>
             <dl className="space-y-2 text-sm">
               <div>
-                <dt className="text-gray-500">Created</dt>
+                <dt className="text-gray-500 dark:text-gray-400">Created</dt>
                 <dd>{formatDate(repo.created_at)}</dd>
               </div>
               <div>
-                <dt className="text-gray-500">Updated</dt>
+                <dt className="text-gray-500 dark:text-gray-400">Updated</dt>
                 <dd>{formatDate(repo.updated_at)}</dd>
               </div>
             </dl>

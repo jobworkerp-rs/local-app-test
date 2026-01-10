@@ -470,6 +470,8 @@ CREATE TABLE app_settings (
   default_base_branch TEXT NOT NULL DEFAULT 'main',
   agent_timeout_minutes INTEGER NOT NULL DEFAULT 30,
   sync_interval_minutes INTEGER NOT NULL DEFAULT 10,
+  grpc_server_url TEXT NOT NULL DEFAULT 'http://localhost:9000',  -- jobworkerp-rs接続先
+  locale TEXT NOT NULL DEFAULT 'en',  -- UI言語設定
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -585,6 +587,8 @@ export interface AppSettings {
   defaultBaseBranch: string;
   agentTimeoutMinutes: number;
   syncIntervalMinutes: number;
+  grpcServerUrl: string;       // jobworkerp-rs gRPC接続先URL
+  locale: string;              // UI言語設定（'en', 'ja'等）
   createdAt: string;
   updatedAt: string;
 }
@@ -673,46 +677,54 @@ export interface CreatePlatformRequest {
   baseUrl: string;
   token: string;
 }
+
+/** MCPサーバー（Runner）動的作成リクエスト */
+export interface CreateMcpRunnerRequest {
+  platform: "GitHub" | "Gitea";
+  name: string;           // MCPサーバー識別名（ユーザー指定）
+  url: string;            // GitHub: "https://github.com"(デフォルト), Gitea: "https://gitea.example.com"
+  token: string;          // Personal Access Token
+}
+
+/** MCPサーバー情報 */
+export interface McpServerInfo {
+  name: string;
+  description: string | null;
+  runner_type: string;    // "MCP_SERVER"
+}
 ```
 
 ---
 
 ## 5. ディレクトリ構成
 
-```
-local-code-agent-frontend/
+```text
+local-code-agent/
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml
 │       └── release.yml
 ├── src/                          # WebView (TypeScript/React)
 │   ├── main.tsx                  # エントリポイント
-│   ├── App.tsx                   # ルートコンポーネント
 │   ├── routes/                   # TanStack Router ファイルベースルーティング
 │   │   ├── __root.tsx            # ルートレイアウト
 │   │   ├── index.tsx             # / ダッシュボード
-│   │   ├── platforms/
-│   │   │   ├── index.tsx         # /platforms 一覧
-│   │   │   └── new.tsx           # /platforms/new 新規追加
+│   │   ├── repositories.tsx      # /repositories レイアウト + リポジトリ一覧
 │   │   ├── repositories/
-│   │   │   ├── index.tsx         # /repositories 一覧
-│   │   │   └── $id/
-│   │   │       ├── index.tsx     # /repositories/$id 詳細
-│   │   │       ├── issues.tsx    # /repositories/$id/issues
-│   │   │       └── pulls.tsx     # /repositories/$id/pulls
+│   │   │   ├── $repoId.tsx       # /repositories/$repoId 詳細
+│   │   │   └── $repoId/
+│   │   │       ├── issues.tsx    # /repositories/$repoId/issues
+│   │   │       └── pulls.tsx     # /repositories/$repoId/pulls
 │   │   ├── jobs/
 │   │   │   ├── index.tsx         # /jobs 一覧
-│   │   │   └── $id.tsx           # /jobs/$id 詳細（ストリーミング）
+│   │   │   └── $jobId.tsx        # /jobs/$jobId 詳細（ストリーミング）
 │   │   └── settings.tsx          # /settings
 │   ├── components/
 │   │   ├── ui/                   # shadcn/ui
 │   │   ├── layout/
 │   │   │   ├── header.tsx
 │   │   │   ├── sidebar.tsx
-│   │   │   └── nav.tsx
-│   │   ├── platforms/
-│   │   │   ├── platform-card.tsx
-│   │   │   └── platform-form.tsx
+│   │   │   └── index.ts
 │   │   ├── repositories/
 │   │   │   ├── repo-card.tsx
 │   │   │   └── repo-selector.tsx
@@ -728,7 +740,6 @@ local-code-agent-frontend/
 │   ├── hooks/
 │   │   ├── use-job-stream.ts     # Tauriイベントベースストリーミング
 │   │   ├── use-job-status.ts     # ステータスポーリング
-│   │   ├── use-platform.ts
 │   │   ├── use-repository.ts
 │   │   └── use-tauri.ts          # Tauri invoke/listen ラッパー
 │   ├── lib/
@@ -738,21 +749,15 @@ local-code-agent-frontend/
 │   │   │   └── types.ts          # Rust⇔TS共有型定義
 │   │   ├── query/
 │   │   │   ├── query-client.ts   # TanStack Query設定
-│   │   │   ├── platforms.ts      # プラットフォームクエリ
 │   │   │   ├── repositories.ts   # リポジトリクエリ
 │   │   │   ├── issues.ts         # Issueクエリ
 │   │   │   └── jobs.ts           # ジョブクエリ
-│   │   └── utils/
-│   │       ├── date.ts
-│   │       └── error.ts
+│   │   └── utils.ts
 │   ├── stores/
 │   │   ├── ui-store.ts           # UIステート（Zustand）
 │   │   └── preferences-store.ts
 │   ├── types/
-│   │   ├── platform.ts
-│   │   ├── repository.ts
-│   │   ├── issue.ts
-│   │   └── agent-job.ts
+│   │   └── models.ts             # 統合型定義
 │   ├── routeTree.gen.ts          # TanStack Router自動生成
 │   └── config/
 │       └── env.ts
@@ -767,26 +772,25 @@ local-code-agent-frontend/
 │   │   ├── lib.rs                # Tauriアプリ初期化
 │   │   ├── commands/             # Tauriコマンド定義
 │   │   │   ├── mod.rs
-│   │   │   ├── platform.rs       # platform::create, list, delete
-│   │   │   ├── repository.rs     # repository::add, sync, list
-│   │   │   ├── agent.rs          # agent::start, cancel, status
-│   │   │   └── job.rs            # job::stream (イベント発火)
+│   │   │   ├── connection.rs     # 接続確認
+│   │   │   ├── mcp.rs            # MCP管理（list, check, create_runner）
+│   │   │   ├── repositories.rs   # repository::add, sync, list
+│   │   │   ├── issues.rs         # issue一覧・詳細
+│   │   │   ├── pulls.rs          # PR一覧・関連PR検出
+│   │   │   ├── jobs.rs           # job一覧・詳細
+│   │   │   └── settings.rs       # 設定取得・更新
 │   │   ├── grpc/                 # gRPCクライアント (tonic)
 │   │   │   ├── mod.rs
-│   │   │   ├── client.rs         # gRPC接続管理
-│   │   │   └── proto/            # tonic-build生成コード
-│   │   │       └── jobworkerp.rs
+│   │   │   ├── client.rs         # gRPC接続管理、MCP呼び出し
+│   │   │   └── generated/        # tonic-build生成コード
+│   │   │       ├── jobworkerp.data.rs
+│   │   │       └── jobworkerp.service.rs
 │   │   ├── db/                   # SQLite操作 (rusqlite)
 │   │   │   ├── mod.rs
 │   │   │   ├── connection.rs     # コネクションプール
-│   │   │   ├── migrations/       # SQLマイグレーション
-│   │   │   │   ├── V1__initial.sql
-│   │   │   │   └── mod.rs
-│   │   │   └── repositories/     # データアクセス層
-│   │   │       ├── mod.rs
-│   │   │       ├── platform.rs
-│   │   │       ├── repository.rs
-│   │   │       └── agent_job.rs
+│   │   │   ├── models.rs         # データモデル定義
+│   │   │   ├── queries.rs        # DBクエリ関数
+│   │   │   └── migrations.rs     # SQLマイグレーション
 │   │   ├── crypto/               # 暗号化 (aes-gcm)
 │   │   │   ├── mod.rs
 │   │   │   └── token.rs          # トークン暗号化/復号
@@ -807,6 +811,9 @@ local-code-agent-frontend/
 ├── package.json
 └── README.md
 ```
+
+> **注記**: 現在の実装ではプラットフォーム専用ページ（/platforms）は未実装。
+> MCPサーバーの動的登録はリポジトリ登録フォーム内で直接行う設計としている。
 
 ### 5.1 Tauri固有ファイル
 
@@ -871,7 +878,7 @@ tokio = { version = "1", features = ["full"] }
 tonic = "0.12"
 prost = "0.13"
 prost-types = "0.13"
-rusqlite = { version = "0.34", features = ["bundled"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
 r2d2 = "0.8"
 r2d2_sqlite = "0.25"
 aes-gcm = "0.10"
@@ -1023,6 +1030,164 @@ function JobDetailPage() {
       </div>
       <JobStreamViewer jobId={id} />
     </div>
+  );
+}
+```
+
+#### リポジトリ登録フォーム（MCPサーバー選択/新規作成拡張）
+
+```typescript
+// routes/repositories.tsx (RepositoryFormコンポーネント部分)
+import { useState, type FormEvent } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { invoke } from "@tauri-apps/api/core";
+import type { McpServerInfo, CreateMcpRunnerRequest } from "@/types/models";
+
+interface RepositoryFormProps {
+  mcpServers: McpServerInfo[];
+  onSuccess: () => void;
+}
+
+function RepositoryForm({ mcpServers, onSuccess }: RepositoryFormProps) {
+  const queryClient = useQueryClient();
+  // MCPサーバー選択状態: 既存サーバー名 or "new"（新規作成）
+  const [mcpSelection, setMcpSelection] = useState<string>("");
+  // 新規MCPサーバー作成用フォームデータ
+  const [newMcpData, setNewMcpData] = useState<CreateMcpRunnerRequest>({
+    platform: "GitHub",
+    name: "",
+    url: "https://github.com",
+    token: "",
+  });
+
+  // MCPサーバー動的作成Mutation
+  const createMcpMutation = useMutation({
+    mutationFn: (request: CreateMcpRunnerRequest) =>
+      invoke<McpServerInfo>("mcp_create_runner", {
+        platform: request.platform,
+        name: request.name,
+        url: request.url,
+        token: request.token,
+      }),
+    onSuccess: (newServer) => {
+      // MCPサーバー一覧を再取得
+      queryClient.invalidateQueries({ queryKey: ["mcp-servers"] });
+      // 新規作成したサーバーを選択状態にする
+      setMcpSelection(newServer.name);
+    },
+  });
+
+  // プラットフォーム変更時のデフォルトURL設定
+  const handlePlatformChange = (platform: "GitHub" | "Gitea") => {
+    setNewMcpData({
+      ...newMcpData,
+      platform,
+      url: platform === "GitHub" ? "https://github.com" : "",
+    });
+  };
+
+  return (
+    <form className="border border-slate-200 dark:border-slate-700 rounded-lg p-6 mb-6">
+      {/* MCPサーバー選択 */}
+      <div className="mb-4">
+        <label className="block text-sm font-medium mb-1">MCPサーバー</label>
+        <select
+          value={mcpSelection}
+          onChange={(e) => setMcpSelection(e.target.value)}
+          className="w-full p-2 border rounded"
+          required
+        >
+          <option value="">選択してください</option>
+          {mcpServers.map((server) => (
+            <option key={server.name} value={server.name}>
+              {server.name}
+              {server.description ? ` - ${server.description}` : ""}
+            </option>
+          ))}
+          <option value="new">+ 新規MCPサーバー作成</option>
+        </select>
+      </div>
+
+      {/* 新規MCPサーバー作成フォーム（"new"選択時のみ表示） */}
+      {mcpSelection === "new" && (
+        <div className="border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4 bg-blue-50 dark:bg-blue-900/30">
+          <h3 className="text-lg font-semibold mb-3">新規MCPサーバー作成</h3>
+
+          {/* プラットフォーム選択 */}
+          <div className="mb-3">
+            <label className="block text-sm font-medium mb-1">プラットフォーム</label>
+            <select
+              value={newMcpData.platform}
+              onChange={(e) => handlePlatformChange(e.target.value as "GitHub" | "Gitea")}
+              className="w-full p-2 border rounded"
+            >
+              <option value="GitHub">GitHub</option>
+              <option value="Gitea">Gitea</option>
+            </select>
+          </div>
+
+          {/* サーバー識別名 */}
+          <div className="mb-3">
+            <label className="block text-sm font-medium mb-1">サーバー識別名</label>
+            <input
+              type="text"
+              value={newMcpData.name}
+              onChange={(e) => setNewMcpData({ ...newMcpData, name: e.target.value })}
+              placeholder="my-github-server"
+              className="w-full p-2 border rounded"
+              required
+            />
+          </div>
+
+          {/* URL */}
+          <div className="mb-3">
+            <label className="block text-sm font-medium mb-1">
+              URL
+              {newMcpData.platform === "GitHub" && (
+                <span className="text-gray-500 ml-2">(GitHub Enterpriseの場合は変更)</span>
+              )}
+            </label>
+            <input
+              type="url"
+              value={newMcpData.url}
+              onChange={(e) => setNewMcpData({ ...newMcpData, url: e.target.value })}
+              placeholder={newMcpData.platform === "GitHub" ? "https://github.com" : "https://gitea.example.com"}
+              className="w-full p-2 border rounded"
+              required
+            />
+          </div>
+
+          {/* Personal Access Token */}
+          <div className="mb-3">
+            <label className="block text-sm font-medium mb-1">Personal Access Token</label>
+            <input
+              type="password"
+              value={newMcpData.token}
+              onChange={(e) => setNewMcpData({ ...newMcpData, token: e.target.value })}
+              placeholder="ghp_xxxx... / gitea_token_xxxx..."
+              className="w-full p-2 border rounded"
+              required
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => createMcpMutation.mutate(newMcpData)}
+            disabled={createMcpMutation.isPending || !newMcpData.name || !newMcpData.token}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+          >
+            {createMcpMutation.isPending ? "作成中..." : "MCPサーバー作成"}
+          </button>
+
+          {createMcpMutation.isError && (
+            <p className="text-red-600 mt-2">エラー: {String(createMcpMutation.error)}</p>
+          )}
+        </div>
+      )}
+
+      {/* 以下、既存のリポジトリ登録フィールド（owner, repo_name, local_path等） */}
+      {/* ... */}
+    </form>
   );
 }
 ```
@@ -1259,6 +1424,37 @@ pub async fn mcp_list_repositories(
 ) -> Result<Vec<RepositoryInfo>, AppError> {
     // MCPサーバーのget_my_user_info + list_user_reposツールを呼び出し
     grpc.list_repositories_via_mcp(&server_name).await
+}
+
+/// GitHub/Gitea MCPサーバー（Runner）を動的登録
+/// TOML定義は内部でplatformに応じて自動生成（URLからscheme/hostを抽出）
+///
+/// Docker実行形式:
+/// - GitHub: `docker run ghcr.io/github/github-mcp-server` + GITHUB_PERSONAL_ACCESS_TOKEN, GITHUB_HOST（Enterprise時のみ）
+/// - Gitea: `docker run docker.gitea.com/gitea-mcp-server` + GITEA_ACCESS_TOKEN, GITEA_HOST, GITEA_INSECURE（http時のみ）
+#[tauri::command]
+pub async fn mcp_create_runner(
+    grpc: State<'_, Arc<JobworkerpClient>>,
+    platform: String,     // "GitHub" or "Gitea"
+    name: String,         // MCPサーバー識別名
+    url: String,          // URL (https://github.com, https://gitea.example.com)
+    token: String,        // Personal Access Token
+) -> Result<McpServerInfo, AppError> {
+    // platform に応じてTOML定義を内部生成（URLからscheme/hostを抽出）
+    let definition = match platform.as_str() {
+        "GitHub" => github_mcp_toml(&url, &token)?,
+        "Gitea" => gitea_mcp_toml(&url, &token)?,
+        _ => return Err(AppError::InvalidInput(format!("Unsupported platform: {}", platform))),
+    };
+
+    // gRPC経由でRunner登録
+    grpc.create_runner(&name, &definition).await?;
+
+    Ok(McpServerInfo {
+        name,
+        description: Some(format!("{} MCP Server", platform)),
+        transport: "stdio".to_string(),
+    })
 }
 
 // --- 以下、JobworkerpClient内の実装詳細 ---
@@ -2357,17 +2553,17 @@ export default defineConfig({
     "@biomejs/biome": "^1.9.0",
     "@playwright/test": "^1.49.0",
     "@tauri-apps/cli": "^2.0.0",
-    "@tanstack/router-plugin": "^1.95.0",
+    "@tanstack/router-plugin": "^1.146.0",
     "@testing-library/react": "^16.1.0",
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
-    "@vitejs/plugin-react": "^4.4.0",
-    "autoprefixer": "^10.4.20",
-    "postcss": "^8.4.49",
-    "tailwindcss": "^4.0.0",
-    "typescript": "^5.7.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^4.6.0",
+    "autoprefixer": "^10.4.23",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.0",
+    "typescript": "^5.8.0",
     "vite": "^7.0.0",
-    "vitest": "^3.0.0"
+    "vitest": "^4.0.0"
   },
   "engines": {
     "node": ">=20.19.0 || >=22.12.0"
@@ -2378,7 +2574,7 @@ export default defineConfig({
 **バージョン選定方針**:
 - `@tanstack/react-form`: 0.x系は破壊的変更が頻繁なため、パッチバージョンのみ許可（`~`）
 - `vite`: 最新安定版（7.x）を使用
-- `vitest`: viteメジャーバージョン-4を使用（vite 7.x には vitest 3.x）
+- `vitest`: viteメジャーバージョン-3を使用（vite 7.x には vitest 4.x）
 - `tailwindcss`: 4.x安定版を使用
 
 ### 11.6 Rust Proto生成設定

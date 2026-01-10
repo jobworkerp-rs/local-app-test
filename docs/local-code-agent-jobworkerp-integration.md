@@ -158,27 +158,52 @@ GitHub/Gitea MCPサーバーは**サーバー起動時にトークンを設定**
 
 MCPサーバはjobworkerp-rs起動時に`mcp-settings.toml`から読み込まれる。
 
-**stdio トランスポート**:
+**GitHub MCP Server（Docker実行形式・推奨）**:
 ```toml
 [[server]]
 name = "github"
-description = "GitHub MCP Server"
+description = "github server mcp"
 transport = "stdio"
-command = "npx"
-args = ["-y", "@modelcontextprotocol/server-github"]
-envs = { GITHUB_PERSONAL_ACCESS_TOKEN = "ghp_xxxx" }
+command = "docker"
+args = [
+  "run",
+  "-i",
+  "--rm",
+  "-e",
+  "GITHUB_PERSONAL_ACCESS_TOKEN",
+  "ghcr.io/github/github-mcp-server"
+]
+envs = { GITHUB_PERSONAL_ACCESS_TOKEN = "github_pat_xxxxx" }
 ```
 
-**SSE トランスポート**:
+**Gitea MCP Server（Docker実行形式）**:
 ```toml
 [[server]]
 name = "gitea"
-description = "Gitea MCP Server (SSE)"
+description = "gitea mcp server"
+transport = "stdio"
+command = "docker"
+args = [
+  "run",
+  "-i",
+  "--rm",
+  "-e",
+  "GITEA_ACCESS_TOKEN",
+  "docker.gitea.com/gitea-mcp-server"
+]
+envs = { GITEA_ACCESS_TOKEN = "xxx" }
+```
+
+**Gitea MCP Server（SSE トランスポート）**:
+```toml
+[[server]]
+name = "gitea-sse"
+description = "gitea server mcp"
 transport = "sse"
 url = "http://gitea-mcp.example.com:8080/sse"
 
 [server.headers]
-Authorization = "Bearer xxxx"
+Authorization = "Bearer xxxxx"
 ```
 
 **重要な注意事項**:
@@ -186,21 +211,77 @@ Authorization = "Bearer xxxx"
 - 環境変数の動的展開（`${VAR}`形式）はサポートされない
 - トークン等の機密情報はファイルに直接記載されるため、適切な権限管理が必要
 - トークンはサーバー起動時に設定され、実行時に変更できない
+- Docker実行形式が推奨（環境の依存性が少ない）
 
 #### MCPサーバ動的登録（動的設定モード）
 
 複数アカウントや異なるプラットフォームを切り替える場合、`RunnerService.Create`でMCPサーバーを動的に登録できる。
 
+**本サービスでの動的登録TOML生成（Docker実行形式）**:
+
+GitHub:
+```toml
+[[server]]
+name = "my-github"
+description = "GitHub MCP Server"
+transport = "stdio"
+command = "docker"
+args = [
+  "run",
+  "-i",
+  "--rm",
+  "-e",
+  "GITHUB_PERSONAL_ACCESS_TOKEN",
+  "ghcr.io/github/github-mcp-server"
+]
+envs = { GITHUB_PERSONAL_ACCESS_TOKEN = "ghp_xxxx" }
+```
+
+GitHub Enterprise（GITHUB_HOST追加）:
+```toml
+[[server]]
+name = "my-ghes"
+description = "GitHub MCP Server"
+transport = "stdio"
+command = "docker"
+args = [
+  "run",
+  "-i",
+  "--rm",
+  "-e",
+  "GITHUB_PERSONAL_ACCESS_TOKEN",
+  "-e",
+  "GITHUB_HOST",
+  "ghcr.io/github/github-mcp-server"
+]
+envs = { GITHUB_PERSONAL_ACCESS_TOKEN = "ghp_xxxx", GITHUB_HOST = "https://github.example.com" }
+```
+
+Gitea:
+```toml
+[[server]]
+name = "my-gitea"
+description = "Gitea MCP Server"
+transport = "stdio"
+command = "docker"
+args = [
+  "run",
+  "-i",
+  "--rm",
+  "-e",
+  "GITEA_ACCESS_TOKEN",
+  "docker.gitea.com/gitea-mcp-server"
+]
+envs = { GITEA_ACCESS_TOKEN = "xxx", GITEA_HOST = "https://gitea.example.com" }
+```
+
+**gRPC API呼び出し**:
 ```
 RunnerService.Create(
-  name: "github-personal",
+  name: "my-github",
+  description: "GitHub MCP Server",
   runner_type: MCP_SERVER,
-  runner_settings: McpServerSettings {
-    transport: "stdio",
-    command: "npx",
-    args: ["-y", "@modelcontextprotocol/server-github"],
-    envs: { "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_xxxx" }
-  }
+  definition: "<TOML文字列>"  // 上記フォーマットのTOML文字列
 )
 ```
 
@@ -586,7 +667,8 @@ output:
 | 機能 | GitHub MCP | Gitea MCP |
 |------|------------|-----------|
 | Issue一覧 | `list_issues` | `list_repo_issues` |
-| Issue詳細（読取） | `issue_read` | `get_issue_by_index` |
+| Issue詳細（読取） | `issue_read` (method="get") | `get_issue_by_index` |
+| Issueコメント取得 | `issue_read` (method="get_comments") | `list_issue_comments` |
 | Issueコメント追加 | `add_issue_comment` | `create_issue_comment` |
 | Issue検索 | `search_issues` | - |
 | PR一覧 | `list_pull_requests` | `list_repo_pull_requests` |
@@ -831,7 +913,7 @@ do:
                   args: "${[\"-C\", .local_repo_path, \"worktree\", \"add\", $worktree_path, \"-b\", $branch_name]}"
 
         # 2.2 Issue情報取得
-        # Note: GitHub MCP v1.0.0+では issue_read を使用
+        # Note: GitHub MCP v1.0.0+では issue_read を使用、method="get"でissue詳細取得
         - fetchIssue:
             run:
               runner:
@@ -841,22 +923,23 @@ do:
                   owner: "${.owner}"
                   repo: "${.repo}"
                   issue_number: "${.issue_number}"
+                  method: "get"
             export:
               as:
                 issue_body: "${.body}"
 
         # 2.3 Issueコメント取得
-        # Note: GitHub MCP v1.0.0+では issue_read にコメントが含まれる場合あり
-        # 別途取得が必要な場合はsearch_issuesやGraphQL toolsetを検討
+        # Note: GitHub MCP v1.0.0+では issue_read の method="get_comments" でコメント取得
         - fetchIssueComments:
             run:
               runner:
                 name: "${.mcp_server}"
-                using: "add_issue_comment"  # コメント一覧取得ツールは要確認
+                using: "issue_read"
                 arguments:
                   owner: "${.owner}"
                   repo: "${.repo}"
                   issue_number: "${.issue_number}"
+                  method: "get_comments"
             export:
               as:
                 issue_comments: "${.}"

@@ -4,6 +4,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // gRPC proto compilation
     let proto_root = "proto";
+    let out_dir = "src/grpc/generated";
+
+    // Ensure output directory exists
+    std::fs::create_dir_all(out_dir)?;
     let protos = [
         // Data definitions
         "jobworkerp/data/common.proto",
@@ -27,7 +31,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     tonic_build::configure()
         .build_server(false)
         .build_client(true)
-        .out_dir("src/grpc/generated")
+        .out_dir(out_dir)
         .compile_protos(&proto_files, &[proto_root])?;
 
     // Rerun if proto files change

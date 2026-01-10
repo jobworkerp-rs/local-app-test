@@ -31,7 +31,10 @@ impl AppState {
     }
 
     /// Initialize with custom database path and gRPC URL
-    pub fn init_with_config(db_path: Option<&std::path::Path>, grpc_url: Option<&str>) -> Result<Self, AppError> {
+    pub fn init_with_config(
+        db_path: Option<&std::path::Path>,
+        grpc_url: Option<&str>,
+    ) -> Result<Self, AppError> {
         let db = crate::db::init_database(db_path)?;
         Self::new(db, grpc_url)
     }

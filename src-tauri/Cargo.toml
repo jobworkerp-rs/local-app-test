@@ -45,10 +45,12 @@ hex = "0.4"
 # Utilities
 anyhow = "1"
 chrono = { version = "0.4", features = ["serde"] }
+dotenvy = "0.15"
 futures = "0.3"
 async-trait = "0.1"
 directories = "5"
 regex = "1"
+url = "2"
 
 # Platform-specific keyring with native credential store
 [target.'cfg(target_os = "linux")'.dependencies]
@@ -63,3 +65,6 @@ keyring = { version = "3", features = ["windows-native"] }
 # Mobile platforms use mock store (tokens stored in encrypted SQLite instead)
 [target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
 keyring = "3"
+
+[dev-dependencies]
+tempfile = "3.24.0"

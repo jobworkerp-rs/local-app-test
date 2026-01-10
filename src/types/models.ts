@@ -68,6 +68,17 @@ export interface McpServerInfo {
 }
 
 /**
+ * Request to create a new MCP server (Runner) dynamically
+ * Supports GitHub and Gitea platforms with Docker execution format
+ */
+export interface CreateMcpRunnerRequest {
+  platform: "GitHub" | "Gitea";
+  name: string;           // MCP server identifier (user-specified)
+  url: string;            // GitHub: "https://github.com" (default), Gitea: "https://gitea.example.com"
+  token: string;          // Personal Access Token
+}
+
+/**
  * Build a repository URL from Gitea API base URL.
  * Handles various URL formats:
  * - https://gitea.example.com/api/v1

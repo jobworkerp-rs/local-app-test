@@ -89,7 +89,7 @@ function SettingsPage() {
   if (settingsQuery.isLoading) {
     return (
       <div className="container mx-auto p-8">
-        <p>Loading settings...</p>
+        <p className="text-slate-600 dark:text-slate-400">Loading settings...</p>
       </div>
     );
   }
@@ -97,7 +97,7 @@ function SettingsPage() {
   if (settingsQuery.error) {
     return (
       <div className="container mx-auto p-8">
-        <p className="text-red-600">
+        <p className="text-red-600 dark:text-red-400">
           Error loading settings: {String(settingsQuery.error)}
         </p>
       </div>
@@ -107,7 +107,7 @@ function SettingsPage() {
   return (
     <div className="container mx-auto p-8">
       <div className="flex items-center gap-4 mb-6">
-        <Link to="/" className="text-blue-600 hover:underline">
+        <Link to="/" className="text-blue-600 dark:text-blue-400 hover:underline">
           &larr; Back
         </Link>
         <h1 className="text-3xl font-bold">Settings</h1>
@@ -128,7 +128,7 @@ function SettingsPage() {
             onChange={(e) =>
               updateFormField("worktree_base_path", e.target.value)
             }
-            className="w-full p-2 border rounded"
+            className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
           />
         </div>
 
@@ -146,7 +146,7 @@ function SettingsPage() {
             onChange={(e) =>
               updateFormField("default_base_branch", e.target.value)
             }
-            className="w-full p-2 border rounded"
+            className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
           />
         </div>
 
@@ -165,7 +165,7 @@ function SettingsPage() {
             onChange={(e) =>
               handleNumericChange("agent_timeout_minutes", e.target.value)
             }
-            className="w-full p-2 border rounded"
+            className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
           />
         </div>
 
@@ -184,7 +184,7 @@ function SettingsPage() {
             onChange={(e) =>
               handleNumericChange("sync_interval_minutes", e.target.value)
             }
-            className="w-full p-2 border rounded"
+            className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
           />
         </div>
 
@@ -197,10 +197,10 @@ function SettingsPage() {
         </button>
 
         {updateMutation.isSuccess && (
-          <p className="text-green-600">Settings saved successfully!</p>
+          <p className="text-green-600 dark:text-green-400">Settings saved successfully!</p>
         )}
         {updateMutation.isError && (
-          <p className="text-red-600">
+          <p className="text-red-600 dark:text-red-400">
             Error: {String(updateMutation.error)}
           </p>
         )}

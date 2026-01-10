@@ -52,9 +52,8 @@ pub fn run_migrations(pool: &DbPool) -> Result<(), AppError> {
 
 /// Get default database path
 pub fn default_db_path() -> Result<std::path::PathBuf, AppError> {
-    let project_dirs =
-        directories::ProjectDirs::from("com", "local-code-agent", "LocalCodeAgent")
-            .ok_or_else(|| AppError::Config("Cannot determine data directory".into()))?;
+    let project_dirs = directories::ProjectDirs::from("com", "local-code-agent", "LocalCodeAgent")
+        .ok_or_else(|| AppError::Config("Cannot determine data directory".into()))?;
 
     let data_dir = project_dirs.data_local_dir();
     Ok(data_dir.join("local-code-agent.db"))

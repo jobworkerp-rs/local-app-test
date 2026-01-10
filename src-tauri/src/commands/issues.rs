@@ -1,70 +1,9 @@
 use std::sync::Arc;
 use tauri::State;
 
-use crate::db::{DbPool, Issue, Platform, Repository};
+use crate::db::{get_repository_by_id, DbPool, Issue, Platform};
 use crate::error::AppError;
 use crate::grpc::JobworkerpClient;
-
-/// Get repository by ID from database
-fn get_repo_by_id(db: &DbPool, id: i64) -> Result<Repository, AppError> {
-    let conn = db.get().map_err(|e| AppError::Internal(e.to_string()))?;
-
-    let mut stmt = conn.prepare(
-        "SELECT id, mcp_server_name, platform, base_url, name, url, owner, repo_name,
-                local_path, last_synced_at, created_at, updated_at
-         FROM repositories WHERE id = ?1",
-    )?;
-
-    let row_data: (
-        i64,
-        String,
-        String,
-        String,
-        String,
-        String,
-        String,
-        String,
-        Option<String>,
-        Option<String>,
-        String,
-        String,
-    ) = stmt.query_row([id], |row| {
-        Ok((
-            row.get(0)?,
-            row.get(1)?,
-            row.get(2)?,
-            row.get(3)?,
-            row.get(4)?,
-            row.get(5)?,
-            row.get(6)?,
-            row.get(7)?,
-            row.get(8)?,
-            row.get(9)?,
-            row.get(10)?,
-            row.get(11)?,
-        ))
-    })?;
-
-    let platform: Platform = row_data
-        .2
-        .parse()
-        .map_err(|_| AppError::InvalidInput(format!("Invalid platform value: {}", row_data.2)))?;
-
-    Ok(Repository {
-        id: row_data.0,
-        mcp_server_name: row_data.1,
-        platform,
-        base_url: row_data.3,
-        name: row_data.4,
-        url: row_data.5,
-        owner: row_data.6,
-        repo_name: row_data.7,
-        local_path: row_data.8,
-        last_synced_at: row_data.9,
-        created_at: row_data.10,
-        updated_at: row_data.11,
-    })
-}
 
 /// Get the MCP tool name for listing issues based on platform
 fn get_list_issues_tool(platform: Platform) -> &'static str {
@@ -79,6 +18,16 @@ fn get_read_issue_tool(platform: Platform) -> &'static str {
     match platform {
         Platform::GitHub => "issue_read",
         Platform::Gitea => "get_issue_by_index",
+    }
+}
+
+/// Convert issue state to platform-specific format
+/// GitHub MCP expects uppercase: "OPEN", "CLOSED"
+/// Gitea MCP expects lowercase: "open", "closed"
+fn normalize_issue_state(state: &str, platform: Platform) -> String {
+    match platform {
+        Platform::GitHub => state.to_uppercase(),
+        Platform::Gitea => state.to_lowercase(),
     }
 }
 
@@ -153,15 +102,24 @@ fn parse_issue(value: &serde_json::Value) -> Option<Issue> {
 /// Extract issues from MCP result
 /// MCP results typically have a "content" array with text content
 fn extract_issues_from_result(result: &serde_json::Value) -> Result<Vec<Issue>, AppError> {
+    tracing::debug!("extract_issues_from_result: {:?}", result);
+
     // First, try to extract from MCP content structure
     if let Some(content) = result.get("content").and_then(|c| c.as_array()) {
+        tracing::debug!("Found content array with {} items", content.len());
         for item in content {
             if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
+                tracing::debug!("Found text content: {}", &text[..text.len().min(500)]);
                 // Parse the text as JSON
                 if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(text) {
                     if let Some(arr) = parsed.as_array() {
+                        tracing::debug!("Parsed as array with {} items", arr.len());
                         return Ok(arr.iter().filter_map(parse_issue).collect());
+                    } else {
+                        tracing::debug!("Parsed JSON is not an array: {:?}", parsed);
                     }
+                } else {
+                    tracing::debug!("Failed to parse text as JSON");
                 }
             }
         }
@@ -169,16 +127,19 @@ fn extract_issues_from_result(result: &serde_json::Value) -> Result<Vec<Issue>, 
 
     // Direct array format
     if let Some(arr) = result.as_array() {
+        tracing::debug!("Result is direct array with {} items", arr.len());
         return Ok(arr.iter().filter_map(parse_issue).collect());
     }
 
     // Single issue
     if result.get("number").is_some() {
+        tracing::debug!("Result is single issue");
         if let Some(issue) = parse_issue(result) {
             return Ok(vec![issue]);
         }
     }
 
+    tracing::debug!("No issues found in result");
     Ok(vec![])
 }
 
@@ -190,16 +151,30 @@ pub async fn list_issues(
     repository_id: i64,
     state: Option<String>,
 ) -> Result<Vec<Issue>, AppError> {
-    let repo = get_repo_by_id(&db, repository_id)?;
+    let repo = get_repository_by_id(&db, repository_id)?;
     let tool_name = get_list_issues_tool(repo.platform);
+    let state_value =
+        normalize_issue_state(&state.unwrap_or_else(|| "open".to_string()), repo.platform);
 
-    let args = serde_json::json!({
-        "owner": repo.owner,
-        "repo": repo.repo_name,
-        "state": state.unwrap_or_else(|| "open".to_string()),
-    });
+    // GitHub MCP uses "states" (array), Gitea uses "state" (string)
+    let args = match repo.platform {
+        Platform::GitHub => serde_json::json!({
+            "owner": repo.owner,
+            "repo": repo.repo_name,
+            "states": [state_value],
+        }),
+        Platform::Gitea => serde_json::json!({
+            "owner": repo.owner,
+            "repo": repo.repo_name,
+            "state": state_value,
+        }),
+    };
 
-    let result = grpc.call_mcp_tool(&repo.mcp_server_name, tool_name, &args).await?;
+    tracing::debug!("list_issues args: {:?}", args);
+
+    let result = grpc
+        .call_mcp_tool(&repo.mcp_server_name, tool_name, &args)
+        .await?;
     extract_issues_from_result(&result)
 }
 
@@ -211,7 +186,7 @@ pub async fn get_issue(
     repository_id: i64,
     issue_number: i32,
 ) -> Result<Issue, AppError> {
-    let repo = get_repo_by_id(&db, repository_id)?;
+    let repo = get_repository_by_id(&db, repository_id)?;
     let tool_name = get_read_issue_tool(repo.platform);
 
     let args = serde_json::json!({
@@ -220,7 +195,9 @@ pub async fn get_issue(
         "issue_number": issue_number,
     });
 
-    let result = grpc.call_mcp_tool(&repo.mcp_server_name, tool_name, &args).await?;
+    let result = grpc
+        .call_mcp_tool(&repo.mcp_server_name, tool_name, &args)
+        .await?;
 
     // Try to extract from MCP content structure first
     if let Some(content) = result.get("content").and_then(|c| c.as_array()) {
@@ -236,5 +213,6 @@ pub async fn get_issue(
     }
 
     // Direct format
-    parse_issue(&result).ok_or_else(|| AppError::NotFound(format!("Issue #{} not found", issue_number)))
+    parse_issue(&result)
+        .ok_or_else(|| AppError::NotFound(format!("Issue #{} not found", issue_number)))
 }

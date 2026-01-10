@@ -40,5 +40,9 @@ coverage/
 routeTree.gen.ts
 src/paraglide/
 
+# Paraglide cache
+project.inlang/cache/
+project.inlang/project_id
+
 # Tauri dev artifacts
 .tauri/

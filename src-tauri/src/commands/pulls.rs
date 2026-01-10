@@ -2,70 +2,9 @@ use regex::Regex;
 use std::sync::Arc;
 use tauri::State;
 
-use crate::db::{DbPool, Platform, PullRequest, Repository};
+use crate::db::{get_repository_by_id, DbPool, Platform, PullRequest};
 use crate::error::AppError;
 use crate::grpc::JobworkerpClient;
-
-/// Get repository by ID from database
-fn get_repo_by_id(db: &DbPool, id: i64) -> Result<Repository, AppError> {
-    let conn = db.get().map_err(|e| AppError::Internal(e.to_string()))?;
-
-    let mut stmt = conn.prepare(
-        "SELECT id, mcp_server_name, platform, base_url, name, url, owner, repo_name,
-                local_path, last_synced_at, created_at, updated_at
-         FROM repositories WHERE id = ?1",
-    )?;
-
-    let row_data: (
-        i64,
-        String,
-        String,
-        String,
-        String,
-        String,
-        String,
-        String,
-        Option<String>,
-        Option<String>,
-        String,
-        String,
-    ) = stmt.query_row([id], |row| {
-        Ok((
-            row.get(0)?,
-            row.get(1)?,
-            row.get(2)?,
-            row.get(3)?,
-            row.get(4)?,
-            row.get(5)?,
-            row.get(6)?,
-            row.get(7)?,
-            row.get(8)?,
-            row.get(9)?,
-            row.get(10)?,
-            row.get(11)?,
-        ))
-    })?;
-
-    let platform: Platform = row_data
-        .2
-        .parse()
-        .map_err(|_| AppError::InvalidInput(format!("Invalid platform value: {}", row_data.2)))?;
-
-    Ok(Repository {
-        id: row_data.0,
-        mcp_server_name: row_data.1,
-        platform,
-        base_url: row_data.3,
-        name: row_data.4,
-        url: row_data.5,
-        owner: row_data.6,
-        repo_name: row_data.7,
-        local_path: row_data.8,
-        last_synced_at: row_data.9,
-        created_at: row_data.10,
-        updated_at: row_data.11,
-    })
-}
 
 /// Get the MCP tool name for listing pull requests based on platform
 fn get_list_pulls_tool(platform: Platform) -> &'static str {
@@ -221,7 +160,7 @@ pub async fn list_pulls(
     repository_id: i64,
     state: Option<String>,
 ) -> Result<Vec<PullRequest>, AppError> {
-    let repo = get_repo_by_id(&db, repository_id)?;
+    let repo = get_repository_by_id(&db, repository_id)?;
     let tool_name = get_list_pulls_tool(repo.platform);
 
     let args = serde_json::json!({
@@ -230,7 +169,9 @@ pub async fn list_pulls(
         "state": state.unwrap_or_else(|| "open".to_string()),
     });
 
-    let result = grpc.call_mcp_tool(&repo.mcp_server_name, tool_name, &args).await?;
+    let result = grpc
+        .call_mcp_tool(&repo.mcp_server_name, tool_name, &args)
+        .await?;
     extract_pulls_from_result(&result)
 }
 
@@ -242,7 +183,7 @@ pub async fn find_related_prs(
     repository_id: i64,
     issue_number: i32,
 ) -> Result<Vec<PullRequest>, AppError> {
-    let repo = get_repo_by_id(&db, repository_id)?;
+    let repo = get_repository_by_id(&db, repository_id)?;
     let tool_name = get_list_pulls_tool(repo.platform);
 
     // Fetch all PRs (open and closed) to find related ones
@@ -252,7 +193,9 @@ pub async fn find_related_prs(
         "state": "all",
     });
 
-    let result = grpc.call_mcp_tool(&repo.mcp_server_name, tool_name, &args).await?;
+    let result = grpc
+        .call_mcp_tool(&repo.mcp_server_name, tool_name, &args)
+        .await?;
     let all_prs = extract_pulls_from_result(&result)?;
 
     // Filter to related PRs
