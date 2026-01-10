@@ -85,7 +85,7 @@ export function listMcpServers(): Promise<McpServerInfo[]> {
  * Check if an MCP server is connected
  */
 export function checkMcpConnection(serverName: string): Promise<boolean> {
-  return invoke<boolean>("mcp_check_connection", { server_name: serverName });
+  return invoke<boolean>("mcp_check_connection", { serverName });
 }
 
 /**
@@ -120,7 +120,7 @@ export function listRepositories(): Promise<Repository[]> {
  * Get a single repository by ID
  */
 export function getRepository(repositoryId: number): Promise<Repository> {
-  return invoke<Repository>("get_repository", { repository_id: repositoryId });
+  return invoke<Repository>("get_repository", { repositoryId });
 }
 
 /**
@@ -151,7 +151,7 @@ export function listIssues(
   state?: "open" | "closed" | "all"
 ): Promise<Issue[]> {
   return invoke<Issue[]>("list_issues", {
-    repository_id: repositoryId,
+    repositoryId,
     state: state ?? "open",
   });
 }
@@ -164,8 +164,8 @@ export function getIssue(
   issueNumber: number
 ): Promise<Issue> {
   return invoke<Issue>("get_issue", {
-    repository_id: repositoryId,
-    issue_number: issueNumber,
+    repositoryId,
+    issueNumber,
   });
 }
 
@@ -181,7 +181,7 @@ export function listPulls(
   state?: "open" | "closed" | "all"
 ): Promise<PullRequest[]> {
   return invoke<PullRequest[]>("list_pulls", {
-    repository_id: repositoryId,
+    repositoryId,
     state: state ?? "open",
   });
 }
@@ -194,8 +194,8 @@ export function findRelatedPrs(
   issueNumber: number
 ): Promise<PullRequest[]> {
   return invoke<PullRequest[]>("find_related_prs", {
-    repository_id: repositoryId,
-    issue_number: issueNumber,
+    repositoryId,
+    issueNumber,
   });
 }
 
@@ -247,5 +247,5 @@ export function startAgent(
  * NOTE: Not yet implemented in backend (Phase 3)
  */
 export function cancelAgent(jobworkerpJobId: string): Promise<void> {
-  return invoke<void>("agent_cancel", { jobworkerp_job_id: jobworkerpJobId });
+  return invoke<void>("agent_cancel", { jobworkerpJobId });
 }
