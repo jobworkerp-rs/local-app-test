@@ -31,8 +31,17 @@ fn normalize_issue_state(state: &str, platform: Platform) -> String {
     }
 }
 
+/// Build issue URL from repository URL and issue number
+fn build_issue_url(repo_url: &str, issue_number: i32, platform: Platform) -> String {
+    let base = repo_url.trim_end_matches('/');
+    match platform {
+        Platform::GitHub => format!("{}/issues/{}", base, issue_number),
+        Platform::Gitea => format!("{}/issues/{}", base, issue_number),
+    }
+}
+
 /// Parse issue from MCP result JSON (handles both GitHub and Gitea formats)
-fn parse_issue(value: &serde_json::Value) -> Option<Issue> {
+fn parse_issue(value: &serde_json::Value, repo_url: &str, platform: Platform) -> Option<Issue> {
     let number_i64 = value.get("number")?.as_i64()?;
     let number: i32 = number_i64.try_into().ok()?;
     let title = value.get("title")?.as_str()?.to_string();
@@ -68,11 +77,12 @@ fn parse_issue(value: &serde_json::Value) -> Option<Issue> {
         })
         .unwrap_or_default();
 
+    // Use html_url from response if available, otherwise build from repo URL
     let html_url = value
         .get("html_url")
         .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
+        .map(String::from)
+        .unwrap_or_else(|| build_issue_url(repo_url, number, platform));
 
     let created_at = value
         .get("created_at")
@@ -105,13 +115,20 @@ fn parse_issue(value: &serde_json::Value) -> Option<Issue> {
 /// 2. MCP content structure: {"content": [{"text": "..."}]}
 /// 3. Direct array: [...]
 /// 4. Single issue object: {"number": ...}
-fn extract_issues_from_result(result: &serde_json::Value) -> Result<Vec<Issue>, AppError> {
+fn extract_issues_from_result(
+    result: &serde_json::Value,
+    repo_url: &str,
+    platform: Platform,
+) -> Result<Vec<Issue>, AppError> {
     tracing::debug!("extract_issues_from_result: {:?}", result);
 
     // GitHub MCP format: {"issues": [...], "pageInfo": {...}}
     if let Some(issues_arr) = result.get("issues").and_then(|i| i.as_array()) {
         tracing::debug!("Found 'issues' field with {} items", issues_arr.len());
-        return Ok(issues_arr.iter().filter_map(parse_issue).collect());
+        return Ok(issues_arr
+            .iter()
+            .filter_map(|v| parse_issue(v, repo_url, platform))
+            .collect());
     }
 
     // MCP content structure: {"content": [{"text": {"text": "..."}}]} or {"content": [{"text": "..."}]}
@@ -119,15 +136,13 @@ fn extract_issues_from_result(result: &serde_json::Value) -> Result<Vec<Issue>, 
         tracing::debug!("Found content array with {} items", content.len());
         for item in content {
             // Try nested text.text structure first (Protobuf decoded format)
-            let text_str = item
-                .get("text")
-                .and_then(|t| {
-                    // Try {"text": {"text": "..."}} format
-                    t.get("text")
-                        .and_then(|inner| inner.as_str())
-                        // Fallback to {"text": "..."} format
-                        .or_else(|| t.as_str())
-                });
+            let text_str = item.get("text").and_then(|t| {
+                // Try {"text": {"text": "..."}} format
+                t.get("text")
+                    .and_then(|inner| inner.as_str())
+                    // Fallback to {"text": "..."} format
+                    .or_else(|| t.as_str())
+            });
 
             if let Some(text) = text_str {
                 tracing::debug!("Found text content: {}", &text[..text.len().min(500)]);
@@ -138,12 +153,18 @@ fn extract_issues_from_result(result: &serde_json::Value) -> Result<Vec<Issue>, 
                             "Parsed text contains 'issues' field with {} items",
                             issues_arr.len()
                         );
-                        return Ok(issues_arr.iter().filter_map(parse_issue).collect());
+                        return Ok(issues_arr
+                            .iter()
+                            .filter_map(|v| parse_issue(v, repo_url, platform))
+                            .collect());
                     }
                     // Try direct array within text
                     if let Some(arr) = parsed.as_array() {
                         tracing::debug!("Parsed as array with {} items", arr.len());
-                        return Ok(arr.iter().filter_map(parse_issue).collect());
+                        return Ok(arr
+                            .iter()
+                            .filter_map(|v| parse_issue(v, repo_url, platform))
+                            .collect());
                     }
                     tracing::debug!("Parsed JSON has neither 'issues' nor array: {:?}", parsed);
                 } else {
@@ -156,13 +177,16 @@ fn extract_issues_from_result(result: &serde_json::Value) -> Result<Vec<Issue>, 
     // Direct array format
     if let Some(arr) = result.as_array() {
         tracing::debug!("Result is direct array with {} items", arr.len());
-        return Ok(arr.iter().filter_map(parse_issue).collect());
+        return Ok(arr
+            .iter()
+            .filter_map(|v| parse_issue(v, repo_url, platform))
+            .collect());
     }
 
     // Single issue
     if result.get("number").is_some() {
         tracing::debug!("Result is single issue");
-        if let Some(issue) = parse_issue(result) {
+        if let Some(issue) = parse_issue(result, repo_url, platform) {
             return Ok(vec![issue]);
         }
     }
@@ -203,7 +227,7 @@ pub async fn list_issues(
     let result = grpc
         .call_mcp_tool(&repo.mcp_server_name, tool_name, &args)
         .await?;
-    extract_issues_from_result(&result)
+    extract_issues_from_result(&result, &repo.url, repo.platform)
 }
 
 /// Get a single issue by number
@@ -230,9 +254,15 @@ pub async fn get_issue(
     // Try to extract from MCP content structure first
     if let Some(content) = result.get("content").and_then(|c| c.as_array()) {
         for item in content {
-            if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
+            // Handle nested text.text structure (Protobuf decoded format)
+            let text_str = item.get("text").and_then(|t| {
+                t.get("text")
+                    .and_then(|inner| inner.as_str())
+                    .or_else(|| t.as_str())
+            });
+            if let Some(text) = text_str {
                 if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(text) {
-                    if let Some(issue) = parse_issue(&parsed) {
+                    if let Some(issue) = parse_issue(&parsed, &repo.url, repo.platform) {
                         return Ok(issue);
                     }
                 }
@@ -241,6 +271,6 @@ pub async fn get_issue(
     }
 
     // Direct format
-    parse_issue(&result)
+    parse_issue(&result, &repo.url, repo.platform)
         .ok_or_else(|| AppError::NotFound(format!("Issue #{} not found", issue_number)))
 }
