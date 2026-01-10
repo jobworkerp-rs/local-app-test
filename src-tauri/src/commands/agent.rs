@@ -328,24 +328,47 @@ fn parse_workflow_result(data: &[u8]) -> Result<WorkflowResult, AppError> {
 }
 
 /// Get workflow file path from app resources
+/// In development mode, falls back to project root workflows directory
 fn get_workflow_path(app: &AppHandle) -> Result<PathBuf, AppError> {
-    let resource_path = app
-        .path()
-        .resource_dir()
-        .map_err(|e| AppError::Internal(format!("Failed to get resource dir: {}", e)))?;
+    let workflow_filename = "code-agent-workflow.yaml";
 
-    let workflow_path = resource_path
-        .join("workflows")
-        .join("code-agent-workflow.yaml");
-
-    if !workflow_path.exists() {
-        return Err(AppError::NotFound(format!(
-            "Workflow file not found: {}",
-            workflow_path.display()
-        )));
+    // Try production path first (bundled resources)
+    if let Ok(resource_path) = app.path().resource_dir() {
+        let workflow_path = resource_path.join("workflows").join(workflow_filename);
+        if workflow_path.exists() {
+            return Ok(workflow_path);
+        }
     }
 
-    Ok(workflow_path)
+    // Development fallback: check relative to manifest dir (src-tauri)
+    // This works when running `tauri dev`
+    let dev_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .map(|p| p.join("workflows").join(workflow_filename));
+
+    if let Some(path) = dev_path {
+        if path.exists() {
+            tracing::debug!("Using development workflow path: {}", path.display());
+            return Ok(path);
+        }
+    }
+
+    // Final fallback: current working directory
+    let cwd_path = std::env::current_dir()
+        .map(|p| p.join("workflows").join(workflow_filename))
+        .ok();
+
+    if let Some(path) = cwd_path {
+        if path.exists() {
+            tracing::debug!("Using CWD workflow path: {}", path.display());
+            return Ok(path);
+        }
+    }
+
+    Err(AppError::NotFound(format!(
+        "Workflow file not found. Checked: resource_dir/workflows/{}, CARGO_MANIFEST_DIR/../workflows/{}, CWD/workflows/{}",
+        workflow_filename, workflow_filename, workflow_filename
+    )))
 }
 
 // ============================================================================
