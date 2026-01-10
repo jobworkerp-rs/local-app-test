@@ -3,7 +3,7 @@ use tauri::State;
 
 use crate::db::{get_repository_by_id, DbPool, Issue, IssueComment, Platform};
 use crate::error::AppError;
-use crate::grpc::JobworkerpClient;
+use crate::grpc::LocalCodeAgentClient;
 
 /// Get the MCP tool name for listing issues based on platform
 fn get_list_issues_tool(platform: Platform) -> &'static str {
@@ -213,7 +213,7 @@ fn extract_issues_from_result(
 #[tauri::command]
 pub async fn list_issues(
     db: State<'_, DbPool>,
-    grpc: State<'_, Arc<JobworkerpClient>>,
+    grpc: State<'_, Arc<LocalCodeAgentClient>>,
     repository_id: i64,
     state: Option<String>,
 ) -> Result<Vec<Issue>, AppError> {
@@ -248,7 +248,7 @@ pub async fn list_issues(
 #[tauri::command]
 pub async fn get_issue(
     db: State<'_, DbPool>,
-    grpc: State<'_, Arc<JobworkerpClient>>,
+    grpc: State<'_, Arc<LocalCodeAgentClient>>,
     repository_id: i64,
     issue_number: i32,
 ) -> Result<Issue, AppError> {
@@ -377,7 +377,7 @@ fn extract_comments_from_result(result: &serde_json::Value) -> Result<Vec<IssueC
 #[tauri::command]
 pub async fn get_issue_comments(
     db: State<'_, DbPool>,
-    grpc: State<'_, Arc<JobworkerpClient>>,
+    grpc: State<'_, Arc<LocalCodeAgentClient>>,
     repository_id: i64,
     issue_number: i32,
 ) -> Result<Vec<IssueComment>, AppError> {

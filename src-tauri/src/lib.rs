@@ -28,8 +28,9 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
-            // Initialize application state inside setup hook where Tokio runtime is available
-            let app_state = AppState::init().map_err(|e| {
+            // Initialize application state inside setup hook
+            // Use block_on since setup closure is not async
+            let app_state = tauri::async_runtime::block_on(AppState::init()).map_err(|e| {
                 tracing::error!("Failed to initialize application state: {:?}", e);
                 e.to_string()
             })?;

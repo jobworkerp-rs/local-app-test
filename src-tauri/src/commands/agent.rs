@@ -8,7 +8,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use crate::db::{AgentJobStatus, DbPool, Platform, Repository};
 use crate::error::AppError;
 use crate::grpc::data;
-use crate::grpc::JobworkerpClient;
+use crate::grpc::LocalCodeAgentClient;
 
 /// Request to start an agent job
 #[derive(Debug, Clone, Deserialize)]
@@ -62,14 +62,6 @@ impl std::fmt::Debug for WorkflowInput {
     }
 }
 
-/// Workflow run arguments for jobworkerp-rs
-#[derive(Debug, Clone, Serialize)]
-struct WorkflowRunArgs {
-    workflow_url: Option<String>,
-    workflow_data: Option<String>,
-    input: String,
-}
-
 /// Event types for job streaming
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type")]
@@ -93,7 +85,7 @@ pub enum JobStreamEvent {
 pub async fn agent_start(
     app: AppHandle,
     db: State<'_, DbPool>,
-    grpc: State<'_, Arc<JobworkerpClient>>,
+    grpc: State<'_, Arc<LocalCodeAgentClient>>,
     request: StartAgentRequest,
 ) -> Result<StartAgentResponse, AppError> {
     tracing::info!(
@@ -159,17 +151,15 @@ pub async fn agent_start(
         custom_prompt: request.custom_prompt.clone(),
     };
 
-    let workflow_args = WorkflowRunArgs {
-        workflow_url: Some(format!("file://{}", workflow_path.display())),
-        workflow_data: None,
-        input: serde_json::to_string(&workflow_input)?,
-    };
-
     tracing::debug!("Workflow input: {:?}", workflow_input);
 
-    // 7. Enqueue workflow job
-    let args_json = serde_json::to_value(&workflow_args)?;
-    let jobworkerp_job_id = grpc.enqueue_job("WORKFLOW", &args_json).await?;
+    // 7. Enqueue workflow job using LocalCodeAgentClient (auto-creates worker if needed)
+    let workflow_url = format!("file://{}", workflow_path.display());
+    let input_json = serde_json::to_string(&workflow_input)?;
+
+    let (jobworkerp_job_id, stream) = grpc
+        .enqueue_workflow_for_stream(&workflow_url, &input_json, None)
+        .await?;
 
     tracing::info!("Enqueued job with id: {}", jobworkerp_job_id);
 
@@ -187,13 +177,9 @@ pub async fn agent_start(
 
     // 9. Spawn background task for stream listening
     let db_pool = db.inner().clone();
-    let grpc_client = grpc.inner().clone();
-    let jobworkerp_job_id_clone = jobworkerp_job_id.clone();
 
     tauri::async_runtime::spawn(async move {
-        if let Err(e) =
-            stream_job_results(app, db_pool, grpc_client, job_id, jobworkerp_job_id_clone).await
-        {
+        if let Err(e) = stream_job_results_from_stream(app, db_pool, job_id, stream).await {
             tracing::error!("Stream listener error: {:?}", e);
         }
     });
@@ -208,7 +194,7 @@ pub async fn agent_start(
 #[tauri::command]
 pub async fn agent_cancel(
     db: State<'_, DbPool>,
-    grpc: State<'_, Arc<JobworkerpClient>>,
+    grpc: State<'_, Arc<LocalCodeAgentClient>>,
     jobworkerp_job_id: String,
 ) -> Result<(), AppError> {
     tracing::info!("Cancelling job: {}", jobworkerp_job_id);
@@ -224,22 +210,18 @@ pub async fn agent_cancel(
     Ok(())
 }
 
-/// Stream job results and emit events
-async fn stream_job_results(
+/// Stream job results from an existing stream and emit events
+async fn stream_job_results_from_stream(
     app: AppHandle,
     db: DbPool,
-    grpc: Arc<JobworkerpClient>,
     job_id: i64,
-    jobworkerp_job_id: String,
+    mut stream: tonic::Streaming<data::ResultOutputItem>,
 ) -> Result<(), AppError> {
     let event_name = format!("job-stream-{}", job_id);
     tracing::debug!("Starting stream listener for job {}", job_id);
 
     // Update status to indicate we're preparing
     update_job_status(&db, job_id, AgentJobStatus::PreparingWorkspace)?;
-
-    // Listen to the job stream
-    let mut stream = grpc.listen_stream(&jobworkerp_job_id).await?;
 
     while let Some(item) = stream
         .message()

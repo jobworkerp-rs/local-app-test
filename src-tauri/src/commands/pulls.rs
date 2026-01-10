@@ -4,7 +4,7 @@ use tauri::State;
 
 use crate::db::{get_repository_by_id, DbPool, Platform, PullRequest};
 use crate::error::AppError;
-use crate::grpc::JobworkerpClient;
+use crate::grpc::LocalCodeAgentClient;
 
 /// Get the MCP tool name for listing pull requests based on platform
 fn get_list_pulls_tool(platform: Platform) -> &'static str {
@@ -156,7 +156,7 @@ fn is_related_pr(pr: &PullRequest, issue_number: i32) -> bool {
 #[tauri::command]
 pub async fn list_pulls(
     db: State<'_, DbPool>,
-    grpc: State<'_, Arc<JobworkerpClient>>,
+    grpc: State<'_, Arc<LocalCodeAgentClient>>,
     repository_id: i64,
     state: Option<String>,
 ) -> Result<Vec<PullRequest>, AppError> {
@@ -179,7 +179,7 @@ pub async fn list_pulls(
 #[tauri::command]
 pub async fn find_related_prs(
     db: State<'_, DbPool>,
-    grpc: State<'_, Arc<JobworkerpClient>>,
+    grpc: State<'_, Arc<LocalCodeAgentClient>>,
     repository_id: i64,
     issue_number: i32,
 ) -> Result<Vec<PullRequest>, AppError> {

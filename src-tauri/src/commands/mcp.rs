@@ -3,7 +3,7 @@ use tauri::State;
 use url::Url;
 
 use crate::error::AppError;
-use crate::grpc::{JobworkerpClient, McpServerInfo};
+use crate::grpc::{LocalCodeAgentClient, McpServerInfo};
 
 /// Validate and escape a string for TOML value.
 /// Rejects strings containing characters that could break TOML parsing.
@@ -52,7 +52,7 @@ fn validate_runner_name(name: &str) -> Result<(), AppError> {
 /// List configured MCP servers from jobworkerp-rs
 #[tauri::command]
 pub async fn mcp_list_servers(
-    grpc: State<'_, Arc<JobworkerpClient>>,
+    grpc: State<'_, Arc<LocalCodeAgentClient>>,
 ) -> Result<Vec<McpServerInfo>, AppError> {
     grpc.list_mcp_servers().await
 }
@@ -61,10 +61,10 @@ pub async fn mcp_list_servers(
 #[tauri::command]
 pub async fn mcp_check_connection(
     server_name: String,
-    grpc: State<'_, Arc<JobworkerpClient>>,
+    grpc: State<'_, Arc<LocalCodeAgentClient>>,
 ) -> Result<bool, AppError> {
     // Check if server exists by finding the worker
-    let worker = grpc.find_worker_by_name(&server_name).await?;
+    let worker = grpc.find_worker_by_exact_name(&server_name).await?;
     Ok(worker.is_some())
 }
 
@@ -74,7 +74,7 @@ pub async fn mcp_check_connection(
 /// Docker execution format is used for MCP servers.
 #[tauri::command]
 pub async fn mcp_create_runner(
-    grpc: State<'_, Arc<JobworkerpClient>>,
+    grpc: State<'_, Arc<LocalCodeAgentClient>>,
     platform: String,
     name: String,
     url: String,

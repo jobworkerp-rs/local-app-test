@@ -54,6 +54,7 @@ async-trait = "0.1"
 directories = "5"
 regex = "1"
 url = "2"
+tokio-stream = "0.1.18"
 
 # Platform-specific keyring with native credential store
 [target.'cfg(target_os = "linux")'.dependencies]
